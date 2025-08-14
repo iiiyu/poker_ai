@@ -13,7 +13,13 @@ from poker_ai.games.short_deck import state
 from poker_ai.ai.multiprocess.worker import Worker
 
 log = logging.getLogger("sync.server")
-manager = mp.Manager()
+
+def get_manager():
+    """Get or create a multiprocessing manager."""
+    global _manager
+    if '_manager' not in globals():
+        _manager = mp.Manager()
+    return _manager
 
 
 class Server:

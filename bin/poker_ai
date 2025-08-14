@@ -1,6 +1,19 @@
 #!/usr/bin/env python
-from poker_ai.cli.runner import cli
+"""Entry point for poker_ai CLI with proper multiprocessing handling."""
+import multiprocessing
+import sys
+
+
+def main():
+    """Main entry point with multiprocessing setup."""
+    # Import here to avoid multiprocessing issues on import
+    from poker_ai.cli.runner import cli
+    cli()
 
 
 if __name__ == "__main__":
-    cli()
+    # Required for macOS and Windows when using multiprocessing
+    multiprocessing.freeze_support()
+    if sys.platform == 'darwin':  # macOS
+        multiprocessing.set_start_method('spawn', force=True)
+    main()

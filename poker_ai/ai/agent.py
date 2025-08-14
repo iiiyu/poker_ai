@@ -5,7 +5,12 @@ from typing import Callable, Optional, Union
 
 import joblib
 
-manager = mp.Manager()
+def get_manager():
+    """Get or create a multiprocessing manager."""
+    global _manager
+    if '_manager' not in globals():
+        _manager = mp.Manager()
+    return _manager
 
 
 class Agent:
@@ -38,6 +43,7 @@ class Agent:
         # Don't use manager if we are running tests.
         testing_suite = bool(os.environ.get("TESTING_SUITE", False))
         use_manager = use_manager and not testing_suite
+        manager = get_manager() if use_manager else None
         dict_constructor: Callable = manager.dict if use_manager else dict
         self.strategy = dict_constructor()
         self.regret = dict_constructor()
