@@ -343,6 +343,12 @@ def serialise(
     if locks:
         locks["pre_flop_strategy"].release()
     joblib.dump(offline_agent, agent_path)
+    
+    # Save the offline strategy snapshot
+    offline_strategy_path = save_path / f"offline_strategy_{t}.gz"
+    joblib.dump(offline_agent["strategy"], offline_strategy_path)
+    log.info(f"Saved offline strategy to {offline_strategy_path}")
+    
     # Dump the server state to file too, but first update a few bits of the
     # state so when we load it next time, we start from the right place in
     # the optimisation process.

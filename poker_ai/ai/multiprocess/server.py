@@ -111,9 +111,9 @@ class Server:
                         i=i,
                     )
                 self.job("cfr", sync_workers=self._sync_cfr, t=t, i=i)
-            if t < self._lcfr_threshold & t % self._discount_interval == 0:
+            if t < self._lcfr_threshold and t % self._discount_interval == 0:
                 self.job("discount", sync_workers=self._sync_discount, t=t)
-            if t > self._update_threshold and t % self._dump_iteration == 0:
+            if t % self._dump_iteration == 0:
                 self.job(
                     "serialise",
                     sync_workers=self._sync_serialise,
@@ -121,6 +121,11 @@ class Server:
                     server_state=self.to_dict(),
                 )
             progress_bar.update()
+        
+        # Close the progress bar properly when done
+        progress_bar.close()
+        progress_bar_manager.stop()
+        log.info("Training completed successfully!")
 
     def terminate(self, safe: bool = False):
         """Kill all workers."""

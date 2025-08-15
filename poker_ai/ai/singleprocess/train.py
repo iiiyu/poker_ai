@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import random
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Union
 
 import click
 import joblib
@@ -84,9 +84,14 @@ def simple_search(
     utils.random.seed(42)
     agent = Agent(use_manager=False)
     card_info_lut = {}
-    for t in trange(1, n_iterations + 1, desc="train iter"):
+    pbar = trange(1, n_iterations + 1, desc="Training")
+    for t in pbar:
         if t == 2:
             logging.disable(logging.DEBUG)
+        
+        # Update progress bar with more detailed info
+        pbar.set_description(f"Training iteration {t}/{n_iterations}")
+        
         for i in range(n_players):  # fixed position i
             # Create a new state.
             state: ShortDeckPokerState = new_game(
@@ -105,21 +110,26 @@ def simple_search(
                     ai.cfrp(agent=agent, state=state, i=i, t=t, c=c)
             else:
                 ai.cfr(agent=agent, state=state, i=i, t=t)
-        if t < lcfr_threshold & t % discount_interval == 0:
+        if t < lcfr_threshold and t % discount_interval == 0:
             d = (t / discount_interval) / ((t / discount_interval) + 1)
             for I in agent.regret.keys():
                 for a in agent.regret[I].keys():
                     agent.regret[I][a] *= d
                     agent.strategy[I][a] *= d
-        if (t > update_threshold) & (t % dump_iteration == 0):
+        if t % dump_iteration == 0:
             # dump the current strategy (sigma) throughout training and then
             # take an average. This allows for estimation of expected value in
             # leaf nodes later on using modified versions of the blueprint
             # strategy.
+            pbar.set_description(f"Saving checkpoint at iteration {t}")
             ai.serialise(
                 agent=agent, save_path=save_path, t=t, server_state=config,
             )
+            pbar.set_description(f"Training iteration {t}/{n_iterations}")
 
+    pbar.set_description("Training complete")
+    pbar.close()  # Properly close the progress bar
+    print("\nTraining completed successfully!")
     print_strategy(agent.strategy)
 
 
