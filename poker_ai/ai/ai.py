@@ -164,17 +164,34 @@ def cfr(
         # calculate strategy
         this_info_sets_regret = agent.regret.get(state.info_set, state.initial_regret)
         sigma = calculate_strategy(this_info_sets_regret)
+        
+        # Ensure we have probabilities for all legal actions
+        for action in state.legal_actions:
+            if action not in sigma:
+                # If action not in strategy, give it uniform probability
+                sigma[action] = 1.0 / len(state.legal_actions)
+        
+        # Renormalize to only legal actions
+        legal_sigma = {a: sigma.get(a, 0.0) for a in state.legal_actions}
+        total = sum(legal_sigma.values())
+        if total > 0:
+            legal_sigma = {a: p/total for a, p in legal_sigma.items()}
+        else:
+            legal_sigma = {a: 1.0/len(state.legal_actions) for a in state.legal_actions}
 
         vo = 0.0
         voa: Dict[str, float] = {}
         for action in state.legal_actions:
             new_state: TexasHoldemPokerState = state.apply_action(action)
             voa[action] = cfr(agent, new_state, i, t, locks)
-            vo += sigma[action] * voa[action]
+            vo += legal_sigma[action] * voa[action]
         if locks:
             locks["regret"].acquire()
-        this_info_sets_regret = agent.regret.get(state.info_set, state.initial_regret)
+        # Use the same regret dict we already have, don't fetch again
         for action in state.legal_actions:
+            # Ensure the action exists in the regret dict
+            if action not in this_info_sets_regret:
+                this_info_sets_regret[action] = 0.0
             this_info_sets_regret[action] += voa[action] - vo
         # Assign regret back to the shared memory.
         agent.regret[state.info_set] = this_info_sets_regret
@@ -184,8 +201,21 @@ def cfr(
     else:
         this_info_sets_regret = agent.regret.get(state.info_set, state.initial_regret)
         sigma = calculate_strategy(this_info_sets_regret)
-        available_actions: List[str] = list(sigma.keys())
-        action_probabilities: List[float] = list(sigma.values())
+        # Filter to only legal actions
+        legal_actions_set = set(state.legal_actions)
+        available_actions: List[str] = [a for a in sigma.keys() if a in legal_actions_set]
+        if not available_actions:
+            # If no actions from strategy are legal, use uniform over legal actions
+            available_actions = state.legal_actions
+            action_probabilities = [1.0 / len(available_actions)] * len(available_actions)
+        else:
+            action_probabilities: List[float] = [sigma[a] for a in available_actions]
+            # Renormalize probabilities
+            total_prob = sum(action_probabilities)
+            if total_prob > 0:
+                action_probabilities = [p / total_prob for p in action_probabilities]
+            else:
+                action_probabilities = [1.0 / len(available_actions)] * len(available_actions)
         action: str = np.random.choice(available_actions, p=action_probabilities)
         new_state: TexasHoldemPokerState = state.apply_action(action)
         return cfr(agent, new_state, i, t, locks)

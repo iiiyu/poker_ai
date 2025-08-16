@@ -1,0 +1,17 @@
+c: -20000
+discount_interval: 400
+dump_iteration: 5
+lcfr_threshold: 400
+lut_path: .
+n_iterations: 10
+n_players: 2
+nickname: quick_test_agent
+pickle_dir: false
+prune_threshold: 400
+single_process: true
+strategy_interval: 20
+sync_cfr: false
+sync_discount: false
+sync_serialise: false
+sync_update_strategy: false
+update_threshold: 400
