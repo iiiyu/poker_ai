@@ -14,14 +14,21 @@ MODE="normal"
 ITERATIONS=1000000
 PLAYERS=3
 SAVE_INTERVAL=10000
+USE_MULTIPROCESS=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        test)
+            MODE="test"
+            ITERATIONS=100
+            SAVE_INTERVAL=50
+            shift
+            ;;
         quick)
             MODE="quick"
-            ITERATIONS=10000
-            SAVE_INTERVAL=1000
+            ITERATIONS=1000
+            SAVE_INTERVAL=200
             shift
             ;;
         medium)
@@ -54,15 +61,17 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [mode] [options]"
             echo ""
             echo "Modes:"
-            echo "  quick       - Quick training (10K iterations, ~5-10 minutes)"
-            echo "  medium      - Medium training (100K iterations, ~1-2 hours)"
-            echo "  long        - Long training (1M iterations, ~10-20 hours) [default]"
-            echo "  ultra       - Ultra long training (10M iterations, ~4-7 days)"
+            echo "  test        - Test training (100 iterations, ~30 seconds)"
+            echo "  quick       - Quick training (1K iterations, ~2-5 minutes)"
+            echo "  medium      - Medium training (100K iterations, ~3-8 hours)"
+            echo "  long        - Long training (1M iterations, ~30-80 hours) [default]"
+            echo "  ultra       - Ultra long training (10M iterations, ~2-4 weeks)"
             echo "  continuous  - Continuous training loop (runs indefinitely)"
             echo "  resume      - Resume from latest checkpoint"
             echo ""
             echo "Options:"
             echo "  --players N  - Number of players (2-6, default: 3)"
+            echo "  --multi      - Use multiprocessing for faster training"
             echo "  --help       - Show this help message"
             echo ""
             echo "Examples:"
@@ -75,6 +84,10 @@ while [[ $# -gt 0 ]]; do
         --players)
             PLAYERS="$2"
             shift 2
+            ;;
+        --multi)
+            USE_MULTIPROCESS=true
+            shift
             ;;
         *)
             echo "Unknown option: $1"
@@ -101,9 +114,28 @@ format_time() {
 # Estimate training time (rough estimates)
 estimate_time() {
     local iters=$1
-    # Rough estimate: ~100 iterations per second on modern hardware
-    local seconds=$((iters / 100))
-    format_time $seconds
+    local players=$2
+    local multiprocess=$3
+    
+    # More realistic estimates based on actual performance
+    # Single process: ~5-15 iterations/second
+    # Multi process: ~20-50 iterations/second
+    # Scales with number of players
+    
+    if [ "$multiprocess" = true ]; then
+        local rate=30  # Average for multiprocess
+    else
+        local rate=10  # Average for single process
+    fi
+    
+    # Adjust for number of players (more players = slower)
+    rate=$((rate * 3 / players))
+    
+    local seconds=$((iters / rate))
+    local min_seconds=$((seconds * 3 / 4))  # -25% for best case
+    local max_seconds=$((seconds * 3 / 2))  # +50% for worst case
+    
+    echo "$(format_time $min_seconds) - $(format_time $max_seconds)"
 }
 
 # Print banner
@@ -124,26 +156,36 @@ fi
 echo -e "${GREEN}Training Configuration:${NC}"
 echo "  Mode: $MODE"
 echo "  Players: $PLAYERS"
+if [ "$USE_MULTIPROCESS" = true ]; then
+    echo "  Processing: Multiprocess (faster)"
+else
+    echo "  Processing: Single process"
+fi
 
 case $MODE in
+    test)
+        echo "  Iterations: 100"
+        echo "  Estimated time: $(estimate_time 100 $PLAYERS $USE_MULTIPROCESS)"
+        echo "  Purpose: Minimal test to verify setup works"
+        ;;
     quick)
-        echo "  Iterations: 10,000"
-        echo "  Estimated time: ~$(estimate_time 10000)"
-        echo "  Purpose: Quick test to verify setup"
+        echo "  Iterations: 1,000"
+        echo "  Estimated time: $(estimate_time 1000 $PLAYERS $USE_MULTIPROCESS)"
+        echo "  Purpose: Quick training for basic strategy"
         ;;
     medium)
         echo "  Iterations: 100,000"
-        echo "  Estimated time: ~$(estimate_time 100000)"
-        echo "  Purpose: Basic strategy development"
+        echo "  Estimated time: $(estimate_time 100000 $PLAYERS $USE_MULTIPROCESS)"
+        echo "  Purpose: Decent strategy development"
         ;;
     long)
         echo "  Iterations: 1,000,000"
-        echo "  Estimated time: ~$(estimate_time 1000000)"
-        echo "  Purpose: Competitive strategy"
+        echo "  Estimated time: $(estimate_time 1000000 $PLAYERS $USE_MULTIPROCESS)"
+        echo "  Purpose: Strong competitive strategy"
         ;;
     ultra)
         echo "  Iterations: 10,000,000"
-        echo "  Estimated time: ~$(estimate_time 10000000)"
+        echo "  Estimated time: $(estimate_time 10000000 $PLAYERS $USE_MULTIPROCESS)"
         echo "  Purpose: Professional-level strategy"
         ;;
     continuous)
@@ -163,19 +205,50 @@ sleep 3
 
 # Run the appropriate training command
 case $MODE in
+    test)
+        echo -e "${GREEN}Starting test training (100 iterations)...${NC}"
+        if [ "$USE_MULTIPROCESS" = true ]; then
+            python train_long_ai.py \
+                --iterations 100 \
+                --players $PLAYERS \
+                --save_interval 50
+        else
+            python train_long_ai.py \
+                --iterations 100 \
+                --players $PLAYERS \
+                --save_interval 50 \
+                --single_process
+        fi
+        ;;
     quick)
-        echo -e "${GREEN}Starting quick training...${NC}"
-        python train_long_ai.py \
-            --iterations 10000 \
-            --players $PLAYERS \
-            --save_interval 1000
+        echo -e "${GREEN}Starting quick training (1K iterations)...${NC}"
+        if [ "$USE_MULTIPROCESS" = true ]; then
+            python train_long_ai.py \
+                --iterations 1000 \
+                --players $PLAYERS \
+                --save_interval 200
+        else
+            python train_long_ai.py \
+                --iterations 1000 \
+                --players $PLAYERS \
+                --save_interval 200 \
+                --single_process
+        fi
         ;;
     medium)
         echo -e "${GREEN}Starting medium training...${NC}"
-        python train_long_ai.py \
-            --iterations 100000 \
-            --players $PLAYERS \
-            --save_interval 5000
+        if [ "$USE_MULTIPROCESS" = true ]; then
+            python train_long_ai.py \
+                --iterations 100000 \
+                --players $PLAYERS \
+                --save_interval 5000
+        else
+            python train_long_ai.py \
+                --iterations 100000 \
+                --players $PLAYERS \
+                --save_interval 5000 \
+                --single_process
+        fi
         ;;
     long)
         echo -e "${GREEN}Starting long training...${NC}"

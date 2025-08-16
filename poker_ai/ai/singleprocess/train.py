@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 from pathlib import Path
 from typing import Dict, Union
 
@@ -84,13 +85,19 @@ def simple_search(
     utils.random.seed(42)
     agent = Agent(use_manager=False)
     card_info_lut = {}
+    
+    # Track performance metrics
+    start_time = time.time()
+    last_save_time = start_time
+    iterations_since_save = 0
+    
     pbar = trange(1, n_iterations + 1, desc="Training")
     for t in pbar:
         if t == 2:
             logging.disable(logging.DEBUG)
         
-        # Update progress bar with more detailed info
-        pbar.set_description(f"Training iteration {t}/{n_iterations}")
+        iteration_start = time.time()
+        iterations_since_save += 1
         
         for i in range(n_players):  # fixed position i
             # Create a new state.
@@ -121,11 +128,38 @@ def simple_search(
             # take an average. This allows for estimation of expected value in
             # leaf nodes later on using modified versions of the blueprint
             # strategy.
-            pbar.set_description(f"Saving checkpoint at iteration {t}")
+            
+            # Calculate performance metrics
+            current_time = time.time()
+            time_since_save = current_time - last_save_time
+            if time_since_save > 0:
+                iter_per_sec = iterations_since_save / time_since_save
+            else:
+                iter_per_sec = 0
+            
+            # Update progress description with performance info
+            elapsed = current_time - start_time
+            avg_speed = t / elapsed if elapsed > 0 else 0
+            remaining = n_iterations - t
+            eta = remaining / avg_speed if avg_speed > 0 else 0
+            
+            pbar.set_description(
+                f"Iter {t}/{n_iterations} | Speed: {iter_per_sec:.1f} it/s | "
+                f"Avg: {avg_speed:.1f} it/s | ETA: {eta/60:.1f}m | Saving..."
+            )
+            
             ai.serialise(
                 agent=agent, save_path=save_path, t=t, server_state=config,
             )
-            pbar.set_description(f"Training iteration {t}/{n_iterations}")
+            
+            # Reset counters
+            last_save_time = current_time
+            iterations_since_save = 0
+            
+            pbar.set_description(
+                f"Iter {t}/{n_iterations} | Speed: {iter_per_sec:.1f} it/s | "
+                f"Avg: {avg_speed:.1f} it/s | ETA: {eta/60:.1f}m"
+            )
 
     pbar.set_description("Training complete")
     pbar.close()  # Properly close the progress bar
