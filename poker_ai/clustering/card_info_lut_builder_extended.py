@@ -1,4 +1,4 @@
-"""Extended CardInfoLutBuilder that supports both short deck and full Texas Hold'em."""
+"""Extended CardInfoLutBuilder for Texas Hold'em."""
 import logging
 import time
 from pathlib import Path
@@ -7,7 +7,6 @@ from typing import Any, Dict
 import joblib
 
 from poker_ai.clustering.card_info_lut_builder import CardInfoLutBuilder
-from poker_ai.clustering.preflop import compute_preflop_lossless_abstraction
 from poker_ai.clustering.preflop_texas_holdem import compute_preflop_lossless_abstraction_texas_holdem
 
 log = logging.getLogger("poker_ai.clustering.runner")
@@ -15,12 +14,7 @@ log = logging.getLogger("poker_ai.clustering.runner")
 
 class CardInfoLutBuilderExtended(CardInfoLutBuilder):
     """
-    Extended version that supports both short deck and full Texas Hold'em.
-    
-    Attributes
-    ----------
-    deck_type : str
-        Either "short_deck" (20 cards, 10-A) or "texas_holdem" (52 cards, 2-A)
+    Extended version for Texas Hold'em (52 cards, 2-A).
     """
     
     def __init__(
@@ -31,24 +25,16 @@ class CardInfoLutBuilderExtended(CardInfoLutBuilder):
         low_card_rank: int,
         high_card_rank: int,
         save_dir: str,
-        deck_type: str = "short_deck",
+        deck_type: str = "texas_holdem",
     ):
         """Initialize with deck type specification."""
         self.deck_type = deck_type
         
-        # Validate deck configuration
-        if deck_type == "short_deck":
-            if low_card_rank != 10 or high_card_rank != 14:
-                raise ValueError(
-                    f"Short deck requires ranks 10-14, got {low_card_rank}-{high_card_rank}"
-                )
-        elif deck_type == "texas_holdem":
-            if low_card_rank != 2 or high_card_rank != 14:
-                raise ValueError(
-                    f"Texas Hold'em requires ranks 2-14, got {low_card_rank}-{high_card_rank}"
-                )
-        else:
-            raise ValueError(f"Unknown deck_type: {deck_type}")
+        # Validate deck configuration for Texas Hold'em
+        if low_card_rank != 2 or high_card_rank != 14:
+            raise ValueError(
+                f"Texas Hold'em requires ranks 2-14, got {low_card_rank}-{high_card_rank}"
+            )
         
         super().__init__(
             n_simulations_river=n_simulations_river,
@@ -59,10 +45,9 @@ class CardInfoLutBuilderExtended(CardInfoLutBuilder):
             save_dir=save_dir,
         )
         
-        # Update file paths based on deck type
-        if deck_type == "texas_holdem":
-            self.card_info_lut_path = Path(save_dir) / "texas_holdem_card_info_lut.joblib"
-            self.centroid_path = Path(save_dir) / "texas_holdem_centroids.joblib"
+        # Set file paths for Texas Hold'em
+        self.card_info_lut_path = Path(save_dir) / "texas_holdem_card_info_lut.joblib"
+        self.centroid_path = Path(save_dir) / "texas_holdem_centroids.joblib"
         
         # Try to load existing files
         try:
@@ -84,15 +69,10 @@ class CardInfoLutBuilderExtended(CardInfoLutBuilder):
         start = time.time()
         
         if "pre_flop" not in self.card_info_lut:
-            # Use appropriate preflop abstraction based on deck type
-            if self.deck_type == "short_deck":
-                self.card_info_lut["pre_flop"] = compute_preflop_lossless_abstraction(
-                    builder=self
-                )
-            else:  # texas_holdem
-                self.card_info_lut["pre_flop"] = compute_preflop_lossless_abstraction_texas_holdem(
-                    builder=self
-                )
+            # Use Texas Hold'em preflop abstraction
+            self.card_info_lut["pre_flop"] = compute_preflop_lossless_abstraction_texas_holdem(
+                builder=self
+            )
             joblib.dump(self.card_info_lut, self.card_info_lut_path)
             log.info(f"Computed preflop abstractions for {self.deck_type}")
         

@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field, validator
 
 class GameType(str, Enum):
     TEXAS_HOLDEM = "texas_holdem"
-    SHORT_DECK = "short_deck"
+    # Kept for backward compatibility but will always use texas_holdem
+    SHORT_DECK = "short_deck"  # DEPRECATED - maps to texas_holdem
 
 
 class BettingRound(str, Enum):

@@ -159,39 +159,26 @@ def test_texas_holdem_factory():
     assert config["high_card_rank"] == 14
 
 
-def test_texas_holdem_vs_short_deck():
-    """Compare Texas Hold'em with short deck to ensure they're different."""
-    # Create both game types
-    texas_holdem = create_poker_game(game_type="texas_holdem", n_players=4)
-    short_deck = create_poker_game(game_type="short_deck", n_players=4)
+def test_texas_holdem_backward_compatibility():
+    """Test that 'short_deck' game type maps to Texas Hold'em for backward compatibility."""
+    # Create game with 'short_deck' type
+    game = create_poker_game(game_type="short_deck", n_players=4)
     
-    # Check deck sizes are different
-    texas_holdem_deck = texas_holdem._table.dealer.deck
-    short_deck_deck = short_deck._table.dealer.deck
+    # Should actually create a Texas Hold'em game
+    deck = game._table.dealer.deck
+    deck.reset()
     
-    texas_holdem_deck.reset()
-    short_deck_deck.reset()
-    
-    # Count cards in each deck
-    texas_cards = 0
-    short_cards = 0
-    
+    # Count cards in deck
+    card_count = 0
     while True:
         try:
-            texas_holdem_deck.pick(random=False)
-            texas_cards += 1
+            deck.pick(random=False)
+            card_count += 1
         except ValueError:
             break
     
-    while True:
-        try:
-            short_deck_deck.pick(random=False)
-            short_cards += 1
-        except ValueError:
-            break
-    
-    assert texas_cards == 52, f"Texas Hold'em should have 52 cards, got {texas_cards}"
-    assert short_cards == 20, f"Short deck should have 20 cards, got {short_cards}"
+    # Should have 52 cards (Texas Hold'em), not 20 (short deck)
+    assert card_count == 52, f"Expected 52 cards for Texas Hold'em, got {card_count}"
 
 
 def test_texas_holdem_betting_with_8_players():

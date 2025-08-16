@@ -64,10 +64,10 @@ def verify_implementation():
         else:
             print("  ✗ Missing factory function")
         
-        if '"texas_holdem"' in factory_content and '"short_deck"' in factory_content:
-            print("  ✓ Supports both game types")
+        if '"texas_holdem"' in factory_content:
+            print("  ✓ Supports Texas Hold'em")
         else:
-            print("  ✗ Missing game type support")
+            print("  ✗ Missing Texas Hold'em support")
     
     # Check preflop abstractions
     with open("poker_ai/clustering/preflop_texas_holdem.py", "r") as f:

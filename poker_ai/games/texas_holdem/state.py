@@ -64,10 +64,10 @@ class TexasHoldemPokerState:
     The class is immutable and new state can be instantiated from once an
     action is applied via the `TexasHoldemPokerState.apply_action` method.
     
-    Key differences from ShortDeckPokerState:
-    - Supports full 52-card deck (ranks 2-14/Ace)
-    - Supports up to 8 players instead of 6
-    - Uses different preflop abstractions for 169 unique starting hands
+    Key features:
+    - Full 52-card deck (ranks 2-14/Ace)
+    - Supports 2-8 players
+    - 169 unique starting hand combinations
     """
 
     def __init__(
@@ -269,19 +269,10 @@ class TexasHoldemPokerState:
             for file_name, betting_stage in zip(file_names, betting_stages):
                 file_path = os.path.join(lut_path, file_name)
                 if not os.path.isfile(file_path):
-                    # Try short deck files as fallback
-                    short_deck_files = [
-                        "preflop_lossless.pkl",
-                        "flop_lossy_2.pkl",
-                        "turn_lossy_2.pkl",
-                        "river_lossy_2.pkl",
-                    ]
-                    file_path = os.path.join(lut_path, short_deck_files[file_names.index(file_name)])
-                    if not os.path.isfile(file_path):
-                        logger.warning(
-                            f"File path not found {file_path}. Will use empty lut."
-                        )
-                        continue
+                    logger.warning(
+                        f"File path not found {file_path}. Will use empty lut."
+                    )
+                    continue
                 with open(file_path, "rb") as fp:
                     card_info_lut[betting_stage] = joblib.load(fp)
         elif lut_path:
@@ -454,6 +445,11 @@ class TexasHoldemPokerState:
     def players(self) -> List[TexasHoldemPokerPlayer]:
         """Returns players in table."""
         return self._table.players
+
+    @property
+    def n_players(self) -> int:
+        """Returns the number of players in the game."""
+        return len(self.players)
 
     @property
     def current_player(self) -> TexasHoldemPokerPlayer:

@@ -7,7 +7,7 @@ from typing import Any, Dict, Union
 
 import numpy as np
 
-from poker_ai.games.short_deck import state
+from poker_ai.games.texas_holdem import state
 
 log = logging.getLogger("poker_ai.utils.io")
 
@@ -29,7 +29,7 @@ class NumpyJSONEncoder(json.JSONEncoder):
 
 def load_info_set_lut(lut_path: Union[str, Path], pickle_dir: bool):
     """Load the info set abstraction lookup table."""
-    info_set_lut = state.ShortDeckPokerState.load_card_lut(lut_path, pickle_dir)
+    info_set_lut = state.TexasHoldemPokerState.load_card_lut(lut_path, pickle_dir)
     return info_set_lut
 
 

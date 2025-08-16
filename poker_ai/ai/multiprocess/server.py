@@ -9,7 +9,7 @@ import enlighten
 
 from poker_ai.ai.agent import Agent
 from poker_ai import utils
-from poker_ai.games.short_deck import state
+from poker_ai.games.texas_holdem import state
 from poker_ai.ai.multiprocess.worker import Worker
 
 log = logging.getLogger("sync.server")

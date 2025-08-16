@@ -15,7 +15,7 @@ from tqdm import tqdm, trange
 from poker_ai.ai.agent import Agent
 from poker_ai.ai import ai
 from poker_ai import utils
-from poker_ai.games.short_deck.state import new_game, ShortDeckPokerState
+from poker_ai.games.texas_holdem.state import new_game, TexasHoldemPokerState
 
 
 def print_strategy(strategy: Dict[str, Dict[str, int]]):
@@ -94,7 +94,7 @@ def simple_search(
         
         for i in range(n_players):  # fixed position i
             # Create a new state.
-            state: ShortDeckPokerState = new_game(
+            state: TexasHoldemPokerState = new_game(
                 n_players,
                 card_info_lut,
                 lut_path=lut_path,

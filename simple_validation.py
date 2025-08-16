@@ -79,17 +79,16 @@ def test_factory():
     from poker_ai.games.factory import create_poker_game, get_deck_configuration
     
     # Test deck configurations
-    short_config = get_deck_configuration("short_deck")
     texas_config = get_deck_configuration("texas_holdem")
     
-    print(f"✓ Short deck: ranks {short_config['low_card_rank']}-{short_config['high_card_rank']}")
     print(f"✓ Texas Hold'em: ranks {texas_config['low_card_rank']}-{texas_config['high_card_rank']}")
     
     # Create games
     print("\nCreating games via factory...")
     
-    short_game = create_poker_game("short_deck", n_players=4)
-    print(f"✓ Short deck game created with {len(short_game.players)} players")
+    # Test backward compatibility - short_deck should map to texas_holdem
+    compat_game = create_poker_game("short_deck", n_players=4)
+    print(f"✓ Backward compatibility: 'short_deck' creates Texas Hold'em with {len(compat_game.players)} players")
     
     texas_game = create_poker_game("texas_holdem", n_players=8)
     print(f"✓ Texas Hold'em game created with {len(texas_game.players)} players")

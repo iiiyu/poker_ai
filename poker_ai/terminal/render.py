@@ -4,14 +4,14 @@ from typing import Dict, List
 
 from blessed import Terminal
 
-from poker_ai.games.short_deck.state import ShortDeckPokerState
+from poker_ai.games.texas_holdem.state import TexasHoldemPokerState
 from poker_ai.terminal.ascii_objects.card_collection import AsciiCardCollection
 from poker_ai.terminal.ascii_objects.logger import AsciiLogger
 from poker_ai.terminal.ascii_objects.player import AsciiPlayer
 
 
 def _compute_header_lines(
-    state: ShortDeckPokerState, og_name_to_name: Dict[str, str]
+    state: TexasHoldemPokerState, og_name_to_name: Dict[str, str]
 ) -> List[str]:
     if state.is_terminal:
         player_winnings = []
@@ -43,7 +43,7 @@ def _compute_header_lines(
 
 def print_header(
     term: Terminal,
-    state: ShortDeckPokerState,
+    state: TexasHoldemPokerState,
     og_name_to_name: Dict[str, str]
 ):
     for line in _compute_header_lines(state, og_name_to_name):

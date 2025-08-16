@@ -88,22 +88,14 @@ def demo_clustering_setup():
 def compare_game_types():
     """Compare short deck vs Texas Hold'em."""
     logger.info("\n" + "="*60)
-    logger.info("Comparing Short Deck vs Texas Hold'em")
+    logger.info("Texas Hold'em Configuration")
     logger.info("="*60)
     
-    # Create both game types
-    short_deck = create_poker_game(game_type="short_deck", n_players=4)
+    # Create Texas Hold'em game
     texas_holdem = create_poker_game(game_type="texas_holdem", n_players=4)
     
-    # Compare deck sizes
-    short_deck_config = get_deck_configuration("short_deck")
+    # Get deck configuration
     texas_holdem_config = get_deck_configuration("texas_holdem")
-    
-    logger.info("\nShort Deck Poker:")
-    logger.info(f"  - Ranks: {short_deck_config['low_card_rank']}-{short_deck_config['high_card_rank']} (10-A)")
-    logger.info(f"  - Total cards: 20 (5 ranks × 4 suits)")
-    logger.info(f"  - Max players: 6")
-    logger.info(f"  - Starting hand combinations: ~190")
     
     logger.info("\nTexas Hold'em:")
     logger.info(f"  - Ranks: {texas_holdem_config['low_card_rank']}-{texas_holdem_config['high_card_rank']} (2-A)")

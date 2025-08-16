@@ -5,7 +5,7 @@ import math
 from poker_ai.poker.card import Card
 
 
-def make_starting_hand_lossless(starting_hand, short_deck) -> int:
+def make_starting_hand_lossless(starting_hand, builder) -> int:
     """"""
     ranks = []
     suits = []

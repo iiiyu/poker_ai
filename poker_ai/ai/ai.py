@@ -9,7 +9,7 @@ import joblib
 import numpy as np
 
 from poker_ai.ai.agent import Agent
-from poker_ai.games.short_deck.state import ShortDeckPokerState
+from poker_ai.games.texas_holdem.state import TexasHoldemPokerState
 
 
 log = logging.getLogger("sync.ai")
@@ -47,7 +47,7 @@ def calculate_strategy(this_info_sets_regret: Dict[str, float]) -> Dict[str, flo
 
 def update_strategy(
     agent: Agent,
-    state: ShortDeckPokerState,
+    state: TexasHoldemPokerState,
     i: int,
     t: int,
     locks: Dict[str, mp.synchronize.Lock] = {},
@@ -61,7 +61,7 @@ def update_strategy(
     ----------
     agent : Agent
         Agent being trained.
-    state : ShortDeckPokerState
+    state : TexasHoldemPokerState
         Current game state.
     i : int
         The Player.
@@ -105,18 +105,18 @@ def update_strategy(
         agent.strategy[state.info_set] = this_states_strategy
         if locks:
             locks["strategy"].release()
-        new_state: ShortDeckPokerState = state.apply_action(action)
+        new_state: TexasHoldemPokerState = state.apply_action(action)
         update_strategy(agent, new_state, i, t, locks)
     else:
         # Traverse each action.
         for action in state.legal_actions:
-            new_state: ShortDeckPokerState = state.apply_action(action)
+            new_state: TexasHoldemPokerState = state.apply_action(action)
             update_strategy(agent, new_state, i, t, locks)
 
 
 def cfr(
     agent: Agent,
-    state: ShortDeckPokerState,
+    state: TexasHoldemPokerState,
     i: int,
     t: int,
     locks: Dict[str, mp.synchronize.Lock] = {},
@@ -130,7 +130,7 @@ def cfr(
     ----------
     agent : Agent
         Agent being trained.
-    state : ShortDeckPokerState
+    state : TexasHoldemPokerState
         Current game state.
     i : int
         The Player.
@@ -168,7 +168,7 @@ def cfr(
         vo = 0.0
         voa: Dict[str, float] = {}
         for action in state.legal_actions:
-            new_state: ShortDeckPokerState = state.apply_action(action)
+            new_state: TexasHoldemPokerState = state.apply_action(action)
             voa[action] = cfr(agent, new_state, i, t, locks)
             vo += sigma[action] * voa[action]
         if locks:
@@ -187,13 +187,13 @@ def cfr(
         available_actions: List[str] = list(sigma.keys())
         action_probabilities: List[float] = list(sigma.values())
         action: str = np.random.choice(available_actions, p=action_probabilities)
-        new_state: ShortDeckPokerState = state.apply_action(action)
+        new_state: TexasHoldemPokerState = state.apply_action(action)
         return cfr(agent, new_state, i, t, locks)
 
 
 def cfrp(
     agent: Agent,
-    state: ShortDeckPokerState,
+    state: TexasHoldemPokerState,
     i: int,
     t: int,
     c: int,
@@ -208,7 +208,7 @@ def cfrp(
     ----------
     agent : Agent
         Agent being trained.
-    state : ShortDeckPokerState
+    state : TexasHoldemPokerState
         Current game state.
     i : int
         The Player.
@@ -252,7 +252,7 @@ def cfrp(
         this_info_sets_regret = agent.regret.get(state.info_set, state.initial_regret)
         for action in state.legal_actions:
             if this_info_sets_regret[action] > c:
-                new_state: ShortDeckPokerState = state.apply_action(action)
+                new_state: TexasHoldemPokerState = state.apply_action(action)
                 voa[action] = cfrp(agent, new_state, i, t, c, locks)
                 explored[action] = True
                 vo += sigma[action] * voa[action]
@@ -275,7 +275,7 @@ def cfrp(
         available_actions: List[str] = list(sigma.keys())
         action_probabilities: List[float] = list(sigma.values())
         action: str = np.random.choice(available_actions, p=action_probabilities)
-        new_state: ShortDeckPokerState = state.apply_action(action)
+        new_state: TexasHoldemPokerState = state.apply_action(action)
         return cfrp(agent, new_state, i, t, c, locks)
 
 
@@ -295,7 +295,7 @@ def serialise(
     ----------
     agent : Agent
         Agent being trained.
-    save_path : ShortDeckPokerState
+    save_path : TexasHoldemPokerState
         Current game state.
     t : int
         The iteration.
