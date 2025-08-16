@@ -302,8 +302,23 @@ def cfrp(
     else:
         this_info_sets_regret = agent.regret.get(state.info_set, state.initial_regret)
         sigma = calculate_strategy(this_info_sets_regret)
-        available_actions: List[str] = list(sigma.keys())
-        action_probabilities: List[float] = list(sigma.values())
+        # Filter sigma to only include legal actions
+        legal_actions_set = set(state.legal_actions)
+        available_actions: List[str] = [a for a in sigma.keys() if a in legal_actions_set]
+        
+        # If no actions from sigma are legal, use uniform distribution over legal actions
+        if not available_actions:
+            available_actions = state.legal_actions
+            action_probabilities = [1.0 / len(available_actions)] * len(available_actions)
+        else:
+            action_probabilities = [sigma[a] for a in available_actions]
+            # Renormalize probabilities
+            total_prob = sum(action_probabilities)
+            if total_prob > 0:
+                action_probabilities = [p / total_prob for p in action_probabilities]
+            else:
+                action_probabilities = [1.0 / len(available_actions)] * len(available_actions)
+        
         action: str = np.random.choice(available_actions, p=action_probabilities)
         new_state: TexasHoldemPokerState = state.apply_action(action)
         return cfrp(agent, new_state, i, t, c, locks)
