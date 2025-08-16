@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -89,16 +90,25 @@ class CardInfoLutBuilder(CardCombos):
     def _compute_river_clusters(self, n_river_clusters: int):
         """Compute river clusters and create lookup table."""
         log.info("Starting computation of river clusters.")
+        log.info(f"Total river combinations to process: {len(self.river):,}")
         start = time.time()
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        
+        # Use smaller chunksize for better progress visibility
+        n_workers = os.cpu_count() or 4
+        chunksize = max(1, min(500, len(self.river) // (n_workers * 10)))
+        log.info(f"Using {n_workers} workers with chunksize {chunksize}")
+        
+        with concurrent.futures.ProcessPoolExecutor(max_workers=n_workers) as executor:
             self._river_ehs = list(
                 tqdm(
                     executor.map(
                         self.process_river_ehs,
                         self.river,
-                        chunksize=len(self.river) // 160,
+                        chunksize=chunksize,
                     ),
                     total=len(self.river),
+                    desc="Processing river combinations",
+                    unit="combo",
                 )
             )
         self.centroids["river"], self._river_clusters = self.cluster(
@@ -113,16 +123,25 @@ class CardInfoLutBuilder(CardCombos):
     def _compute_turn_clusters(self, n_turn_clusters: int):
         """Compute turn clusters and create lookup table."""
         log.info("Starting computation of turn clusters.")
+        log.info(f"Total turn combinations to process: {len(self.turn):,}")
         start = time.time()
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        
+        # Use smaller chunksize for better progress visibility
+        n_workers = os.cpu_count() or 4
+        chunksize = max(1, min(200, len(self.turn) // (n_workers * 10)))
+        log.info(f"Using {n_workers} workers with chunksize {chunksize}")
+        
+        with concurrent.futures.ProcessPoolExecutor(max_workers=n_workers) as executor:
             self._turn_ehs_distributions = list(
                 tqdm(
                     executor.map(
                         self.process_turn_ehs_distributions,
                         self.turn,
-                        chunksize=len(self.turn) // 160,
+                        chunksize=chunksize,
                     ),
                     total=len(self.turn),
+                    desc="Processing turn combinations",
+                    unit="combo",
                 )
             )
         self.centroids["turn"], self._turn_clusters = self.cluster(
@@ -135,16 +154,26 @@ class CardInfoLutBuilder(CardCombos):
     def _compute_flop_clusters(self, n_flop_clusters: int):
         """Compute flop clusters and create lookup table."""
         log.info("Starting computation of flop clusters.")
+        log.info(f"Total flop combinations to process: {len(self.flop):,}")
         start = time.time()
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        
+        # Use smaller chunksize for better progress visibility
+        # and to avoid appearing frozen
+        n_workers = os.cpu_count() or 4
+        chunksize = max(1, min(100, len(self.flop) // (n_workers * 10)))
+        log.info(f"Using {n_workers} workers with chunksize {chunksize}")
+        
+        with concurrent.futures.ProcessPoolExecutor(max_workers=n_workers) as executor:
             self._flop_potential_aware_distributions = list(
                 tqdm(
                     executor.map(
                         self.process_flop_potential_aware_distributions,
                         self.flop,
-                        chunksize=len(self.flop) // 160,
+                        chunksize=chunksize,
                     ),
                     total=len(self.flop),
+                    desc="Processing flop combinations",
+                    unit="combo",
                 )
             )
         self.centroids["flop"], self._flop_clusters = self.cluster(
