@@ -285,3 +285,6 @@ dmypy.json
 
 # uv
 uv.lock
+
+.serena/
+.serena/
