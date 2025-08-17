@@ -281,6 +281,26 @@ Should show:
 - ✅ turn: ~300K entries
 - ✅ flop: ~155K entries
 
+### Q: Why does the script exit after "No existing work found. Starting fresh generation."?
+**Asked**: 2025-01-17
+
+**A:** This was caused by `set -e` at the top of the script, which makes bash exit on any non-zero return code. When `check_existing_progress` returned 2 (meaning no files found), the script would exit immediately instead of continuing to generation.
+
+**Fixed by**:
+- Removing `set -e` from the script
+- Properly handling function returns with `|| RESULT=$?`
+- Adding better progress messages
+
+**To verify the fix works**:
+```bash
+# Run the debug script to test flow
+./debug_safe_script.sh
+
+# If you see all 11 steps, it's working
+# Then run the actual generation
+./generate_texas_holdem_lut_safe.sh test
+```
+
 ### Q: Why does the safe script say "No existing progress found" when I have LUT files?
 **Asked**: 2025-01-17
 
