@@ -23,7 +23,14 @@ check_existing_progress() {
     # Quick check for any .joblib files
     local joblib_count=$(ls -1 *.joblib 2>/dev/null | wc -l)
     if [ $joblib_count -gt 0 ]; then
-        echo -e "${BLUE}Found $joblib_count .joblib file(s) in directory${NC}"
+        echo -e "${BLUE}Found $joblib_count .joblib file(s) in directory:${NC}"
+        # List the actual files found
+        for f in *.joblib; do
+            if [ -f "$f" ]; then
+                local size=$(ls -lh "$f" | awk '{print $5}')
+                echo -e "${BLUE}  - $f (${size})${NC}"
+            fi
+        done
     fi
     
     # First check for any existing LUT files or checkpoints
@@ -129,7 +136,34 @@ except:
         sleep 10
         return 2
     else
-        echo -e "${GREEN}No existing work found. Starting fresh generation.${NC}"
+        # Check if there are any .joblib files that don't match our patterns
+        if [ $joblib_count -gt 0 ]; then
+            echo -e "${YELLOW}Found .joblib file(s) but they don't match expected patterns.${NC}"
+            echo -e "${YELLOW}Expected patterns:${NC}"
+            echo "  - card_info_lut.joblib (main file)"
+            echo "  - texas_holdem_*_lut.joblib (descriptive names)"
+            echo "  - checkpoint_*.joblib (checkpoints)"
+            echo ""
+            echo -e "${YELLOW}Possible actions:${NC}"
+            # Check if any file might be a LUT based on size
+            for f in *.joblib; do
+                if [ -f "$f" ]; then
+                    local size_bytes=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null)
+                    local size_mb=$((size_bytes / 1048576))
+                    if [ $size_mb -gt 50 ]; then
+                        echo -e "${GREEN}  File '$f' is ${size_mb}MB - likely a LUT file${NC}"
+                        echo -e "${GREEN}  Try: mv '$f' card_info_lut.joblib${NC}"
+                    else
+                        echo -e "${BLUE}  File '$f' is ${size_mb}MB - probably not a LUT${NC}"
+                    fi
+                fi
+            done
+            echo ""
+            echo -e "${BLUE}Starting fresh in 10 seconds... (Ctrl+C to rename files first)${NC}"
+            sleep 10
+        else
+            echo -e "${GREEN}No existing work found. Starting fresh generation.${NC}"
+        fi
         return 2
     fi
 }
