@@ -1,0 +1,133 @@
+# Clustering Configuration Presets for Different Memory Constraints
+# These settings are optimized for 52-card Texas Hold'em
+
+# Memory usage estimates are for the peak usage during processing
+# Actual memory usage will be lower after each stage completes
+
+low_memory_16gb:
+  description: "Minimal quality for systems with 16GB RAM"
+  max_memory_gb: 12
+  n_river_clusters: 50
+  n_turn_clusters: 50
+  n_flop_clusters: 50
+  n_simulations_river: 5
+  n_simulations_turn: 5
+  n_simulations_flop: 5
+  estimated_time_hours: 1-2
+  quality_rating: "★☆☆☆☆"
+
+medium_memory_32gb:
+  description: "Balanced quality for systems with 32GB RAM"
+  max_memory_gb: 25
+  n_river_clusters: 150
+  n_turn_clusters: 150
+  n_flop_clusters: 150
+  n_simulations_river: 8
+  n_simulations_turn: 8
+  n_simulations_flop: 8
+  estimated_time_hours: 3-5
+  quality_rating: "★★★☆☆"
+
+high_memory_64gb:
+  description: "High quality for systems with 64GB RAM (recommended)"
+  max_memory_gb: 50
+  n_river_clusters: 300
+  n_turn_clusters: 250
+  n_flop_clusters: 250
+  n_simulations_river: 15
+  n_simulations_turn: 12
+  n_simulations_flop: 12
+  estimated_time_hours: 6-10
+  quality_rating: "★★★★☆"
+
+ultra_memory_64gb_optimized:
+  description: "Maximum quality achievable with 64GB RAM and 50GB limit"
+  max_memory_gb: 50
+  n_river_clusters: 400
+  n_turn_clusters: 300  # Reduced to fit memory constraint
+  n_flop_clusters: 300  # Reduced to fit memory constraint
+  n_simulations_river: 20
+  n_simulations_turn: 15
+  n_simulations_flop: 15
+  estimated_time_hours: 10-15
+  quality_rating: "★★★★★"
+
+professional_128gb:
+  description: "Professional quality for systems with 128GB+ RAM"
+  max_memory_gb: 100
+  n_river_clusters: 500
+  n_turn_clusters: 500
+  n_flop_clusters: 500
+  n_simulations_river: 25
+  n_simulations_turn: 20
+  n_simulations_flop: 20
+  estimated_time_hours: 15-24
+  quality_rating: "★★★★★+"
+
+# Optimizations for specific memory constraints
+
+memory_50gb_optimal:
+  description: "Optimal settings for exactly 50GB memory limit"
+  max_memory_gb: 50
+  settings:
+    - option: "balanced"
+      n_river_clusters: 350
+      n_turn_clusters: 300
+      n_flop_clusters: 300
+      n_simulations_river: 15
+      n_simulations_turn: 12
+      n_simulations_flop: 12
+    - option: "river_focused"
+      n_river_clusters: 450
+      n_turn_clusters: 250
+      n_flop_clusters: 250
+      n_simulations_river: 20
+      n_simulations_turn: 10
+      n_simulations_flop: 10
+    - option: "simulation_heavy"
+      n_river_clusters: 250
+      n_turn_clusters: 250
+      n_flop_clusters: 250
+      n_simulations_river: 25
+      n_simulations_turn: 20
+      n_simulations_flop: 20
+
+# Technical details for memory calculation
+memory_calculation:
+  description: "How memory usage is calculated"
+  river_stage:
+    formula: "combos * (3 * 8 + 8 + lookup_overhead)"
+    combos_52_cards: 133784560
+    memory_per_cluster: "~0.05 GB"
+  turn_stage:
+    formula: "combos * (n_river_clusters * 8 + overhead)"
+    combos_52_cards: 20358520
+    memory_per_cluster: "~2 GB per 100 river clusters"
+    note: "This is the memory bottleneck!"
+  flop_stage:
+    formula: "combos * (n_turn_clusters * 8 + overhead)"
+    combos_52_cards: 2658080
+    memory_per_cluster: "~0.2 GB per 100 turn clusters"
+
+# Recommended workflow for 64GB systems
+recommended_workflow_64gb:
+  step1:
+    action: "Test with low settings first"
+    command: "./generate_lut_memory_safe.sh low"
+    time: "1-2 hours"
+    purpose: "Verify everything works"
+  step2:
+    action: "Generate medium quality for initial training"
+    command: "./generate_lut_memory_safe.sh medium"
+    time: "3-5 hours"
+    purpose: "Good enough for testing strategies"
+  step3:
+    action: "Generate high quality for serious training"
+    command: "./generate_lut_memory_safe.sh high"
+    time: "6-10 hours"
+    purpose: "Production-ready quality"
+  step4:
+    action: "Optional: Ultra quality if you have time"
+    command: "./generate_lut_memory_safe.sh ultra"
+    time: "10-15 hours"
+    purpose: "Maximum achievable quality"
