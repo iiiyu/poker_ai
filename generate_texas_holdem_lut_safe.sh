@@ -1,7 +1,8 @@
 #!/bin/bash
 # Safe Texas Hold'em LUT generation with resume capability
 
-set -e
+# Don't use set -e as it causes issues with function returns
+# set -e
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -238,9 +239,12 @@ case $MODE in
         ;;
 esac
 
-# Check for existing progress
-check_existing_progress
-RESUME_STATUS=$?
+# Check for existing progress and capture return status properly
+check_existing_progress || RESUME_STATUS=$?
+# If function succeeds (returns 0), RESUME_STATUS won't be set, so default to 0
+RESUME_STATUS=${RESUME_STATUS:-0}
+
+echo "" # Add spacing for clarity
 
 if [ $RESUME_STATUS -eq 0 ]; then
     echo -e "${GREEN}Resuming from existing progress...${NC}"
@@ -250,11 +254,12 @@ elif [ $RESUME_STATUS -eq 1 ]; then
     backup_existing_files
     rm -f card_info_lut.joblib centroids.joblib
 else
-    echo -e "${GREEN}Starting fresh generation...${NC}"
+    echo -e "${GREEN}Preparing to start fresh generation...${NC}"
 fi
 
 echo ""
-echo "Configuration:"
+echo -e "${BLUE}=== Configuration ===${NC}"
+echo "  - Mode: $MODE"
 echo "  - Cards: 2-14 (Full 52-card deck)"
 echo "  - River clusters: $RIVER_CLUSTERS"
 echo "  - Turn clusters: $TURN_CLUSTERS"
@@ -262,19 +267,25 @@ echo "  - Flop clusters: $FLOP_CLUSTERS"
 echo "  - Simulations: $RIVER_SIM/$TURN_SIM/$FLOP_SIM"
 echo ""
 echo -e "${YELLOW}Starting generation in 5 seconds... (Press Ctrl+C to cancel)${NC}"
+echo -e "${YELLOW}The generation will begin automatically after countdown${NC}"
 sleep 5
+echo -e "${GREEN}Starting now...${NC}"
 
 # Function to run clustering with automatic retry
 run_clustering_with_retry() {
     local attempt=1
     local max_attempts=3
     
+    echo -e "${GREEN}Starting LUT generation process...${NC}"
+    
     while [ $attempt -le $max_attempts ]; do
         echo ""
-        echo -e "${BLUE}Attempt $attempt of $max_attempts${NC}"
+        echo -e "${BLUE}=== Generation Attempt $attempt of $max_attempts ===${NC}"
         
         # Start timing
         START_TIME=$(date +%s)
+        
+        echo -e "${YELLOW}Executing clustering command...${NC}"
         
         # Run clustering
         if uv run poker_ai cluster \
@@ -286,7 +297,7 @@ run_clustering_with_retry() {
             --n_simulations_river $RIVER_SIM \
             --n_simulations_turn $TURN_SIM \
             --n_simulations_flop $FLOP_SIM \
-            --save_dir .; then
+            --save_dir . 2>&1; then
             
             # Success!
             END_TIME=$(date +%s)
@@ -374,15 +385,24 @@ monitor_resources() {
     done
 }
 
-# Start resource monitoring in background
-monitor_resources &
-MONITOR_PID=$!
+# Start resource monitoring in background (disabled for now to avoid confusion)
+# monitor_resources &
+# MONITOR_PID=$!
 
 # Trap to clean up monitor on exit
-trap "kill $MONITOR_PID 2>/dev/null || true" EXIT
+# trap "kill $MONITOR_PID 2>/dev/null || true" EXIT
+
+echo -e "${GREEN}Calling clustering function...${NC}"
 
 # Run the clustering with retry logic
 run_clustering_with_retry
+CLUSTER_RESULT=$?
+
+if [ $CLUSTER_RESULT -eq 0 ]; then
+    echo -e "${GREEN}✅ Script completed successfully${NC}"
+else
+    echo -e "${RED}❌ Script failed with code $CLUSTER_RESULT${NC}"
+fi
 
 # Clean up
-kill $MONITOR_PID 2>/dev/null || true
+# kill $MONITOR_PID 2>/dev/null || true
