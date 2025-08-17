@@ -2,7 +2,7 @@
 
 ## Overview
 
-This codebase has been upgraded from supporting only Short Deck Poker (20 cards) to also supporting full Texas Hold'em (52 cards) with up to 8 players.
+This codebase now focuses exclusively on Texas Hold'em Poker (52 cards) with support for 2-8 players. Short deck poker support has been removed to simplify the codebase and improve Texas Hold'em strategy quality.
 
 ## Key Changes
 
@@ -30,17 +30,22 @@ This codebase has been upgraded from supporting only Short Deck Poker (20 cards)
   - Separate file paths for each game type's lookup tables
   - Automatic selection of appropriate preflop abstractions
 
-### 4. Game Factory Function
-- **Location**: `poker_ai/games/factory.py`
-- **Function**: `create_poker_game(game_type, n_players, ...)`
-- **Usage**:
-  ```python
-  # Create Texas Hold'em game
-  state = create_poker_game("texas_holdem", n_players=8)
-  
-  # Create Short Deck game (backward compatible)
-  state = create_poker_game("short_deck", n_players=4)
-  ```
+### 4. Default Clustering Parameters (Updated)
+- **Location**: `poker_ai/clustering/runner.py`
+- **New Defaults**:
+  - Card ranks: 2-14 (full deck)
+  - River/Turn/Flop clusters: 200 each
+  - Simulations: 10 each
+  - Expected LUT size: 300-400MB
+  - Generation time: 2-4 hours
+
+### 5. Optimized Training Scripts
+- **Location**: Root directory
+- **Scripts**:
+  - `train_ai.sh` - Multiple training modes (test, quick, medium, long)
+  - `generate_texas_holdem_lut.sh` - LUT generation with quality modes
+  - `monitor_training.py` - Real-time training progress monitoring
+  - `monitor_clustering.py` - Clustering progress monitoring
 
 ## Usage Examples
 

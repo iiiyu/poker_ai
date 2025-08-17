@@ -1,61 +1,110 @@
 # 🎯 Poker AI Training Guide
 
-This guide shows you how to quickly train a poker AI agent for testing.
+This guide shows you how to train a Texas Hold'em poker AI agent using MCCFR.
 
-## 🚀 Quick Start (Fastest Option)
+## 📋 Prerequisites
 
-Train a minimal agent in **under 5 minutes**:
+Before training, you MUST generate the Card Info LUT:
 
 ```bash
-# Option 1: Using the shell script (recommended)
-./quick_train.sh quick
+# Generate LUT (one-time, 2-4 hours for standard quality)
+./generate_texas_holdem_lut.sh standard
 
-# Option 2: Using Python directly
-uv run python train_and_test.py
+# Or use test mode for quick development (30-60 min)
+./generate_texas_holdem_lut.sh test
+```
 
-# Option 3: Using the CLI
-uv run poker_ai train start --n_players 2 --n_iterations 50
+## 🚀 Quick Start
+
+Once you have the LUT, train an agent:
+
+```bash
+# Test mode - verify everything works (100 iterations, ~1 minute)
+./train_ai.sh test
+
+# Quick mode - basic strategy (1K iterations, ~2-5 minutes)
+./train_ai.sh quick
+
+# Medium mode - decent strategy (100K iterations, ~3-8 hours)
+./train_ai.sh medium --multi  # Use --multi for 2-3x speed
 ```
 
 ## 📊 Training Options
 
-### Training Sizes
+### Training Modes (Updated for Texas Hold'em)
 
-| Size | Iterations | Players | Time | Quality | Use Case |
-|------|------------|---------|------|---------|----------|
-| **quick** | 10 | 2 | ~30 sec | Poor | Quick testing only |
-| **small** | 100 | 2-4 | ~5 min | Basic | Development testing |
-| **medium** | 1,000 | 2-6 | ~30 min | Decent | Gameplay testing |
-| **large** | 10,000 | 2-8 | ~5 hours | Good | Actual play |
-| **full** | 100,000+ | 2-8 | Days | Excellent | Competition |
+| Mode | Iterations | Time (Single) | Time (Multi) | Quality | Use Case |
+|------|------------|---------------|--------------|---------|----------|
+| **test** | 100 | ~30s-1m | ~20-40s | Minimal | Verify setup |
+| **quick** | 1,000 | ~2-5 min | ~1-3 min | Basic | Quick testing |
+| **medium** | 100,000 | ~3-8 hours | ~2-4 hours | Good | Decent play |
+| **long** | 1,000,000 | ~30-80 hours | ~15-40 hours | Strong | Competitive |
+| **ultra** | 10,000,000 | ~2-4 weeks | ~1-2 weeks | Pro | Tournament |
 
-### Using the Training Script
+**Note**: Actual times depend on CPU, number of players, and system load.
+
+### Using the Enhanced Training Script
 
 ```bash
-# Quick 2-player agent (fastest)
-./quick_train.sh quick
+# Test training - verify everything works
+./train_ai.sh test
 
-# Small 4-player agent
-./quick_train.sh small 4
+# Quick training with multiprocessing (faster)
+./train_ai.sh quick --multi
 
-# Medium 6-player agent
-./quick_train.sh medium 6
+# Medium training with 2 players (faster than 3+)
+./train_ai.sh medium --players 2 --multi
+
+# Resume interrupted training
+./train_ai.sh resume
+
+# Continuous training (runs indefinitely)
+./train_ai.sh continuous
 ```
+
+## 📊 Monitoring Training Progress
+
+### Real-time Monitoring
+```bash
+# In another terminal while training runs
+python monitor_training.py
+```
+
+Shows:
+- Current iteration and speed (iterations/sec)
+- Estimated time remaining
+- Strategy file size and location
+- System resource usage
+
+### Performance Expectations
+
+**Single Process**:
+- ~5-15 iterations/second
+- Better for small tests
+- Less memory usage
+
+**Multiprocess** (--multi flag):
+- ~20-50 iterations/second
+- 2-3x faster than single
+- Requires more RAM
 
 ## 🎮 Training Methods
 
-### Method 1: Shell Script (Easiest)
+### Method 1: Shell Script (Recommended)
 ```bash
-./quick_train.sh small 2
+# Best for most users
+./train_ai.sh medium --multi
 ```
 
-### Method 2: Python Script
-```python
-# train_and_test.py already configured for minimal training
-uv run python train_and_test.py
+### Method 2: Python Script with Custom Settings
+```bash
+python train_long_ai.py \
+    --iterations 100000 \
+    --players 3 \
+    --save_interval 5000
 ```
 
-### Method 3: CLI with Custom Parameters
+### Method 3: CLI with Full Control
 ```bash
 uv run poker_ai train start \
     --n_players 2 \
