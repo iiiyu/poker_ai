@@ -281,6 +281,31 @@ Should show:
 - ✅ turn: ~300K entries
 - ✅ flop: ~155K entries
 
+### Q: Why does the safe script say "No existing progress found" when I have LUT files?
+**Asked**: 2025-01-17
+
+**A:** The script was only checking for `card_info_lut.joblib`. Now fixed to also detect:
+- Descriptive LUT files (`texas_holdem_*_lut.joblib`)
+- Checkpoint files (`checkpoint_*.joblib`)
+- Backup files (`*.bak`)
+
+**To check all your poker AI files**:
+```bash
+./check_poker_files.sh
+```
+
+This shows:
+- All LUT files and their status
+- Strategy files
+- Checkpoints
+- Recommendations for next steps
+
+**If you have a descriptive LUT but no main file**:
+```bash
+# Restore from backup
+cp texas_holdem_standard_lut.joblib card_info_lut.joblib
+```
+
 ---
 
 ## Best Practices
