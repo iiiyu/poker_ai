@@ -65,27 +65,52 @@ class CardInfoLutBuilder(CardCombos):
         """
         log.info("Starting computation of clusters.")
         start = time.time()
+        
+        # Check what stages are already completed
+        completed_stages = list(self.card_info_lut.keys())
+        if completed_stages:
+            log.info(f"Found existing progress. Completed stages: {completed_stages}")
+            log.info("Will resume from the next incomplete stage.")
+        
+        # Preflop stage
         if "pre_flop" not in self.card_info_lut:
+            log.info("[STAGE 1/4] Computing preflop clusters...")
             self.card_info_lut["pre_flop"] = compute_preflop_lossless_abstraction(
                 builder=self
             )
-            joblib.dump(self.card_info_lut, self.card_info_lut_path)
+            self._save_checkpoint("preflop")
+        else:
+            log.info("[STAGE 1/4] Preflop clusters already computed - skipping")
+        
+        # River stage
         if "river" not in self.card_info_lut:
+            log.info("[STAGE 2/4] Computing river clusters...")
             self.card_info_lut["river"] = self._compute_river_clusters(
                 n_river_clusters,
             )
-            joblib.dump(self.card_info_lut, self.card_info_lut_path)
-            joblib.dump(self.centroids, self.centroid_path)
+            self._save_checkpoint("river")
+        else:
+            log.info("[STAGE 2/4] River clusters already computed - skipping")
+        
+        # Turn stage
         if "turn" not in self.card_info_lut:
+            log.info("[STAGE 3/4] Computing turn clusters...")
             self.card_info_lut["turn"] = self._compute_turn_clusters(n_turn_clusters)
-            joblib.dump(self.card_info_lut, self.card_info_lut_path)
-            joblib.dump(self.centroids, self.centroid_path)
+            self._save_checkpoint("turn")
+        else:
+            log.info("[STAGE 3/4] Turn clusters already computed - skipping")
+        
+        # Flop stage
         if "flop" not in self.card_info_lut:
+            log.info("[STAGE 4/4] Computing flop clusters...")
             self.card_info_lut["flop"] = self._compute_flop_clusters(n_flop_clusters)
-            joblib.dump(self.card_info_lut, self.card_info_lut_path)
-            joblib.dump(self.centroids, self.centroid_path)
+            self._save_checkpoint("flop")
+        else:
+            log.info("[STAGE 4/4] Flop clusters already computed - skipping")
+            
         end = time.time()
         log.info(f"Finished computation of clusters - took {end - start} seconds.")
+        log.info(f"All stages completed: {list(self.card_info_lut.keys())}")
 
     def _compute_river_clusters(self, n_river_clusters: int):
         """Compute river clusters and create lookup table."""
@@ -358,6 +383,24 @@ class CardInfoLutBuilder(CardCombos):
             # Now increment the cluster to which it belongs.
             potential_aware_distribution_flop[min_idx] += 1 / self.n_simulations_flop
         return potential_aware_distribution_flop
+    
+    def _save_checkpoint(self, stage_name: str):
+        """Save checkpoint after completing a stage."""
+        try:
+            log.info(f"Saving checkpoint for {stage_name}...")
+            joblib.dump(self.card_info_lut, self.card_info_lut_path)
+            joblib.dump(self.centroids, self.centroid_path)
+            
+            # Also save a backup with stage name
+            backup_path = self.card_info_lut_path.parent / f"checkpoint_{stage_name}.joblib"
+            joblib.dump(self.card_info_lut, backup_path)
+            
+            log.info(f"✓ Checkpoint saved successfully for {stage_name}")
+            log.info(f"  Main file: {self.card_info_lut_path}")
+            log.info(f"  Backup: {backup_path}")
+        except Exception as e:
+            log.error(f"Failed to save checkpoint: {e}")
+            log.error("WARNING: Progress may be lost if process crashes!")
 
     @staticmethod
     def cluster(num_clusters: int, X: np.ndarray):
