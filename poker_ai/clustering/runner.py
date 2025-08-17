@@ -40,66 +40,66 @@ from poker_ai.clustering.card_info_lut_builder import CardInfoLutBuilder
 @click.command()
 @click.option(
     "--low_card_rank",
-    default=10,
+    default=2,
     help=(
-        "The starting hand rank from 2 through 14 for the deck we want to "
-        "cluster. We recommend starting small."
+        "The starting hand rank from 2 through 14 for the deck. "
+        "Default is 2 for full Texas Hold'em."
     )
 )
 @click.option(
     "--high_card_rank",
     default=14,
     help=(
-        "The starting hand rank from 2 through 14 for the deck we want to "
-        "cluster. We recommend starting small."
+        "The ending hand rank from 2 through 14 for the deck. "
+        "Default is 14 (Ace) for full Texas Hold'em."
     )
 )
 @click.option(
     "--n_river_clusters",
-    default=50,
+    default=200,
     help=(
-        "The number of card information buckets we would like to create for "
-        "the river. We recommend to start small."
+        "The number of card information buckets for the river. "
+        "Default 200 for good strategy approximation."
     )
 )
 @click.option(
     "--n_turn_clusters",
-    default=50,
+    default=200,
     help=(
-        "The number of card information buckets we would like to create for "
-        "the turn. We recommend to start small."
+        "The number of card information buckets for the turn. "
+        "Default 200 for good strategy approximation."
     )
 )
 @click.option(
     "--n_flop_clusters",
-    default=50,
+    default=200,
     help=(
-        "The number of card information buckets we would like to create for "
-        "the flop. We recommend to start small."
+        "The number of card information buckets for the flop. "
+        "Default 200 for good strategy approximation."
     )
 )
 @click.option(
     "--n_simulations_river",
-    default=6,
+    default=10,
     help=(
-        "The number of opponent hand simulations we would like to run on the "
-        "river. We recommend to start small."
+        "The number of opponent hand simulations on the river. "
+        "Default 10 for balanced speed/accuracy."
     )
 )
 @click.option(
     "--n_simulations_turn",
-    default=6,
+    default=10,
     help=(
-        "The number of river card hand simulations we would like to run on the "
-        "turn. We recommend to start small."
+        "The number of river card simulations on the turn. "
+        "Default 10 for balanced speed/accuracy."
     )
 )
 @click.option(
     "--n_simulations_flop",
-    default=6,
+    default=10,
     help=(
-        "The number of turn card hand simulations we would like to run on the "
-        "flop. We recommend to start small."
+        "The number of turn card simulations on the flop. "
+        "Default 10 for balanced speed/accuracy."
     )
 )
 @click.option(

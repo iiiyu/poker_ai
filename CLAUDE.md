@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a poker AI implementation using Monte Carlo Counterfactual Regret Minimization (MCCFR) to train agents that play Short Deck Poker (20-card deck with ranks 10-A). The system supports 2-6 players with a focus on multi-player (Pluribus-style) poker AI.
+This is a poker AI implementation using Monte Carlo Counterfactual Regret Minimization (MCCFR) to train agents that play Texas Hold'em Poker (52-card deck with ranks 2-A). The system supports 2-8 players with a focus on multi-player (Pluribus-style) poker AI.
 
 ## Development Commands
 
@@ -51,10 +51,10 @@ poker_ai viz
 
 ### Core Modules
 
-**poker_ai/games/short_deck/**
+**poker_ai/games/texas_holdem/**
 - `state.py`: Core game state implementation with MCCFR traversal support
 - `player.py`: Player representation with chip/action management
-- Implements Short Deck Poker rules (20-card deck, ranks 10-A only)
+- Implements Texas Hold'em Poker rules (52-card deck, ranks 2-A)
 
 **poker_ai/ai/**
 - `ai.py`: MCCFR algorithm implementation
@@ -108,7 +108,7 @@ Training creates a directory with:
 
 ## Important Constraints
 
-1. **20-card deck only**: Currently hardcoded to ranks 10, J, Q, K, A
+1. **52-card deck**: Full Texas Hold'em with ranks 2-A (configurable)
 2. **Clustering required**: Must run `poker_ai cluster` before training
 3. **Memory intensive**: MCCFR requires significant RAM for strategy storage
 4. **Python 3.7+**: Minimum Python version requirement
@@ -128,8 +128,8 @@ Key test files:
 
 ### Training a New Agent
 ```bash
-# 1. Generate lookup tables (one-time setup)
-poker_ai cluster
+# 1. Generate lookup tables (one-time setup, takes 2-4 hours)
+./generate_texas_holdem_lut.sh  # or use 'test' mode for faster generation
 
 # 2. Start training (creates timestamped directory)
 poker_ai train start --iterations 100000
