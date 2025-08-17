@@ -17,9 +17,43 @@ echo ""
 
 # Check for existing progress
 check_existing_progress() {
+    # First check for any existing LUT files or checkpoints
+    local found_files=0
+    local lut_file=""
+    
+    # Check for main LUT file
     if [ -f "card_info_lut.joblib" ]; then
+        lut_file="card_info_lut.joblib"
         echo -e "${YELLOW}Found existing card_info_lut.joblib${NC}"
-        
+        found_files=1
+    fi
+    
+    # Check for descriptive LUT files
+    for file in texas_holdem_*_lut.joblib; do
+        if [ -f "$file" ]; then
+            echo -e "${YELLOW}Found existing LUT: $file${NC}"
+            found_files=1
+            # If no main file, could use this one
+            if [ -z "$lut_file" ] && [ "$file" != "*.joblib" ]; then
+                echo -e "${BLUE}Could restore from: $file${NC}"
+                echo -e "${BLUE}Run: cp $file card_info_lut.joblib${NC}"
+            fi
+        fi
+    done
+    
+    # Check for checkpoint files
+    for checkpoint in checkpoint_*.joblib; do
+        if [ -f "$checkpoint" ] && [ "$checkpoint" != "checkpoint_*.joblib" ]; then
+            echo -e "${YELLOW}Found checkpoint: $checkpoint${NC}"
+            found_files=1
+            # Extract stage name from checkpoint
+            stage=$(echo $checkpoint | sed 's/checkpoint_\(.*\)\.joblib/\1/')
+            echo -e "${BLUE}  Stage completed: $stage${NC}"
+        fi
+    done
+    
+    # If we have the main LUT file, check its contents
+    if [ -f "card_info_lut.joblib" ]; then
         # Check which stages are complete using Python
         COMPLETED_STAGES=$(python3 -c "
 import joblib
@@ -35,7 +69,7 @@ except:
 " 2>/dev/null || echo "ERROR")
         
         if [ "$COMPLETED_STAGES" != "ERROR" ] && [ -n "$COMPLETED_STAGES" ]; then
-            echo -e "${GREEN}Completed stages: $COMPLETED_STAGES${NC}"
+            echo -e "${GREEN}Completed stages in main file: $COMPLETED_STAGES${NC}"
             
             # Check if all stages are complete
             if [[ "$COMPLETED_STAGES" == *"pre_flop"* ]] && \
@@ -50,11 +84,24 @@ except:
                 return 0
             fi
         else
-            echo -e "${YELLOW}File exists but cannot be read. Will backup and restart.${NC}"
+            echo -e "${YELLOW}Main file exists but cannot be read. Will backup and restart.${NC}"
             return 1
         fi
+    elif [ $found_files -eq 1 ]; then
+        # We found some files but no main LUT
+        echo -e "${YELLOW}Found existing work but no main card_info_lut.joblib${NC}"
+        echo -e "${YELLOW}You may want to restore from a backup or checkpoint${NC}"
+        echo ""
+        echo "Options:"
+        echo "1. Start fresh (current choice)"
+        echo "2. Restore from backup: cp texas_holdem_*_lut.joblib card_info_lut.joblib"
+        echo "3. Use checkpoints (if complete enough)"
+        echo ""
+        echo -e "${BLUE}Starting fresh in 10 seconds... (Ctrl+C to cancel and restore manually)${NC}"
+        sleep 10
+        return 2
     else
-        echo "No existing progress found. Starting fresh."
+        echo -e "${GREEN}No existing work found. Starting fresh generation.${NC}"
         return 2
     fi
 }
