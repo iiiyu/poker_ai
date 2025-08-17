@@ -261,7 +261,7 @@ echo "  - Turn clusters: $TURN_CLUSTERS"
 echo "  - Flop clusters: $FLOP_CLUSTERS"
 echo "  - Simulations: $RIVER_SIM/$TURN_SIM/$FLOP_SIM"
 echo ""
-echo -e "${YELLOW}Starting in 5 seconds... (Press Ctrl+C to cancel)${NC}"
+echo -e "${YELLOW}Starting generation in 5 seconds... (Press Ctrl+C to cancel)${NC}"
 sleep 5
 
 # Function to run clustering with automatic retry
