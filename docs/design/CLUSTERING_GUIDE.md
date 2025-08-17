@@ -6,29 +6,72 @@ The Card Information Lookup Table (LUT) is essential for poker AI training. It g
 
 ## Quick Start
 
-### Generate Standard Quality LUT (Recommended)
+### 🛡️ Use the Safe Script (Recommended)
+
+The safe script includes resume capability, automatic retry, and resource monitoring:
+
 ```bash
-./generate_texas_holdem_lut.sh standard
+# Generate with automatic resume on crash
+./generate_texas_holdem_lut_safe.sh standard
+
+# Check generation status
+./generate_texas_holdem_lut_safe.sh standard status
+
+# Resume after interruption
+./generate_texas_holdem_lut_safe.sh standard resume
+```
+
+### Quick Command Reference
+
+```bash
+# Check if LUT already exists and its status
+./generate_texas_holdem_lut_safe.sh standard status
+
+# Generate for testing (fastest)
+./generate_texas_holdem_lut_safe.sh test
+
+# Generate for training (balanced)
+./generate_texas_holdem_lut_safe.sh standard
+
+# Generate for production (best quality)
+./generate_texas_holdem_lut_safe.sh high
+
+# Resume interrupted generation
+./generate_texas_holdem_lut_safe.sh [mode] resume
+
+# Check progress of existing LUT
+python check_lut_progress.py
+
+# Monitor clustering in real-time (separate terminal)
+python monitor_clustering.py
+```
+
+### Generate Standard Quality LUT
+```bash
+./generate_texas_holdem_lut_safe.sh standard
 ```
 - Time: 2-4 hours
 - Size: ~300-400MB
 - Quality: Good for competitive play
+- **Auto-resumes if interrupted**
 
 ### Generate Test LUT (For Development)
 ```bash
-./generate_texas_holdem_lut.sh test
+./generate_texas_holdem_lut_safe.sh test
 ```
 - Time: 30-60 minutes
 - Size: ~150-200MB
 - Quality: Sufficient for testing
+- **Fast iteration for development**
 
 ### Generate High Quality LUT (For Production)
 ```bash
-./generate_texas_holdem_lut.sh high
+./generate_texas_holdem_lut_safe.sh high
 ```
 - Time: 6-10 hours
 - Size: ~500-700MB
 - Quality: Professional level
+- **Best for final deployment**
 
 ## Understanding the Process
 
@@ -92,6 +135,59 @@ Shows:
    - May appear frozen at 0% initially
    - First progress after ~1-2 minutes
 
+## Advanced Features of Safe Script
+
+### 🔄 Automatic Resume Capability
+
+The safe script (`generate_texas_holdem_lut_safe.sh`) includes intelligent resume:
+
+```bash
+# Check what stages are already complete
+./generate_texas_holdem_lut_safe.sh standard status
+
+# Output example:
+# ✅ Completed stages: pre_flop river turn
+# ⏳ Remaining: flop
+
+# Resume from where it left off
+./generate_texas_holdem_lut_safe.sh standard resume
+```
+
+**How it works**:
+1. Saves checkpoint after each stage (preflop, river, turn, flop)
+2. On resume, detects completed stages and skips them
+3. Automatically backs up existing files before retrying
+
+### 🔁 Automatic Retry on Failure
+
+The script will automatically retry up to 3 times if generation fails:
+- Attempt 1: Initial run
+- Attempt 2: Check for partial progress and resume
+- Attempt 3: Final attempt with fresh start if needed
+
+### 📊 Real-time Resource Monitoring
+
+The safe script monitors system resources every 30 seconds:
+- Shows memory usage during generation
+- Helps identify resource constraints
+- Runs in background without interfering
+
+### 🗄️ Automatic Backup
+
+Before starting or retrying, the script:
+1. Backs up existing `card_info_lut.joblib` with timestamp
+2. Backs up `centroids.joblib` if present
+3. Preserves checkpoint files
+4. Names backups with format: `card_info_lut_YYYYMMDD_HHMMSS.joblib.bak`
+
+### 📝 Descriptive Output Files
+
+After successful generation, creates:
+- `card_info_lut.joblib` - Main file
+- `texas_holdem_[mode]_lut.joblib` - Descriptive copy
+- `checkpoint_*.joblib` - Stage checkpoints
+- `centroids.joblib` - Cluster centers
+
 ## Troubleshooting
 
 ### "Frozen at 0%" Issue
@@ -111,12 +207,34 @@ If you run out of memory:
 
 ### Interrupted Generation
 
-The process saves progress after each stage:
-- River completes → saved
-- Turn completes → saved
-- Flop completes → saved
+With the safe script, interruptions are handled gracefully:
+- **Automatic checkpoints**: Saves after each stage
+- **Smart resume**: Detects and continues from last checkpoint
+- **No lost work**: All completed stages are preserved
 
-You can potentially resume, but it's usually better to restart.
+```bash
+# If generation is interrupted (Ctrl+C, crash, etc.)
+# Simply run:
+./generate_texas_holdem_lut_safe.sh standard resume
+
+# The script will:
+# 1. Check existing progress
+# 2. Skip completed stages
+# 3. Continue from where it stopped
+```
+
+### Corrupted Files
+
+If the LUT file becomes corrupted:
+```bash
+# Check file integrity
+./generate_texas_holdem_lut_safe.sh standard status
+
+# If corrupted, the script will:
+# 1. Detect the corruption
+# 2. Backup the corrupted file
+# 3. Offer to restart fresh
+```
 
 ## Advanced Configuration
 
@@ -254,15 +372,46 @@ km = KMeans(
 )
 ```
 
+## Best Practices for Safe LUT Generation
+
+### Why Use the Safe Script?
+
+The `generate_texas_holdem_lut_safe.sh` script is superior because:
+
+| Feature | Regular Script | Safe Script |
+|---------|---------------|-------------|
+| Resume on crash | ❌ Start over | ✅ Continue from checkpoint |
+| Automatic retry | ❌ Manual restart | ✅ Up to 3 attempts |
+| Progress checking | ❌ Guess based on time | ✅ `status` command |
+| Resource monitoring | ❌ None | ✅ Memory usage display |
+| File backup | ❌ Manual | ✅ Automatic with timestamp |
+| Corruption handling | ❌ Manual detection | ✅ Auto-detect and backup |
+
+### When to Use Each Script
+
+**Use Safe Script for**:
+- Production LUT generation
+- Long-running high-quality modes
+- Unreliable systems or remote servers
+- When you can't monitor continuously
+- First-time generation
+
+**Use Regular Script for**:
+- Quick test runs you're actively monitoring
+- When you need custom parameters
+- Debugging the clustering algorithm
+
 ## Recommendations
 
-1. **For Development**: Use test mode (fast, good enough for testing)
-2. **For Training**: Use standard mode (balanced quality/time)
-3. **For Competition**: Use high mode (maximum quality)
-4. **Generate Once**: Create LUT on best machine, use everywhere
-5. **Monitor Progress**: Always run monitor_clustering.py
-6. **Be Patient**: Flop processing takes time but will complete
-7. **Save Checkpoints**: Use generate_texas_holdem_lut_safe.sh for resume capability
+1. **Always use safe script**: `generate_texas_holdem_lut_safe.sh` for reliability
+2. **For Development**: Use test mode (fast, good enough for testing)
+3. **For Training**: Use standard mode (balanced quality/time)
+4. **For Competition**: Use high mode (maximum quality)
+5. **Generate Once**: Create LUT on best machine, use everywhere
+6. **Check Status First**: Run `status` before starting to see if work exists
+7. **Monitor Progress**: Watch memory usage in the script output
+8. **Be Patient**: Flop processing takes time but will complete
+9. **Trust the Resume**: If interrupted, just run with `resume`
 
 ## Next Steps
 

@@ -137,6 +137,30 @@ Python is the bottleneck - Rust/Zig would be 20-40x faster.
 
 Checkpoints are saved after each stage (preflop, river, turn, flop).
 
+### Q: What's special about the safe LUT generation script?
+**Asked**: 2025-01-17
+
+**A:** The `generate_texas_holdem_lut_safe.sh` script has several advanced features:
+
+**Key Features**:
+1. **Resume capability**: Saves checkpoints after each stage
+2. **Automatic retry**: Up to 3 attempts on failure
+3. **Status checking**: `./script.sh mode status` shows progress
+4. **Resource monitoring**: Displays memory usage every 30 seconds
+5. **Automatic backup**: Timestamps and backs up existing files
+6. **Corruption detection**: Validates existing LUT files
+
+**Comparison**:
+| Feature | Regular Script | Safe Script |
+|---------|---------------|-------------|
+| Resume on crash | ❌ Start over | ✅ Continue from checkpoint |
+| Automatic retry | ❌ Manual | ✅ 3 attempts |
+| Progress check | ❌ None | ✅ `status` command |
+| Resource monitor | ❌ None | ✅ Memory display |
+| File backup | ❌ Manual | ✅ Auto with timestamp |
+
+**When to use**: Always use the safe script for production or long-running generation.
+
 ---
 
 ## Architecture & Design
