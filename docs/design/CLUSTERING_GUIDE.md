@@ -156,6 +156,40 @@ After successful generation:
 
 ## Using the LUT
 
+### Generate Once, Use Everywhere! 🎯
+
+**Important**: You only need to generate the LUT once! It can be reused:
+- On different machines
+- For multiple training runs
+- By different team members
+- Across different operating systems
+
+```bash
+# Generate on powerful machine (ONCE)
+./generate_texas_holdem_lut_safe.sh high  # 6-10 hours, best quality
+
+# Copy to other machines
+scp card_info_lut.joblib user@laptop:~/poker_ai/
+scp card_info_lut.joblib user@server:~/poker_ai/
+
+# Use everywhere (MANY TIMES)
+./train_ai.sh medium  # Uses the LUT, doesn't modify it
+```
+
+### Sharing LUTs
+
+**Best Practices**:
+1. Generate on your most powerful machine
+2. Use high quality mode for production
+3. Version your LUT files
+4. Share via cloud storage or Git LFS
+5. Document generation parameters
+
+```bash
+# Version naming example
+mv card_info_lut.joblib texas_holdem_v1_high_200clusters_2024.joblib
+```
+
 ### In Training
 ```bash
 # The training scripts automatically look for card_info_lut.joblib
@@ -182,13 +216,53 @@ The clustering code has been optimized for:
 3. **Progress visibility**: Descriptive progress bars
 4. **Memory efficiency**: Processes in batches
 
+## LUT Determinism and Variance
+
+### Are LUTs Identical Each Time?
+
+**No**, each generation produces a slightly different LUT due to:
+- Random Monte Carlo sampling
+- K-means random initialization
+- Random opponent hand simulations
+
+### Does It Matter?
+
+**For most users: NO**
+- Variance is small (±1-2% in strategy quality)
+- All LUTs with same parameters are equivalently good
+- Like different poker pros with different styles
+
+**For researchers: MAYBE**
+- Need reproducible results? Set random seeds
+- Comparing algorithms? Use deterministic mode
+- Production use? Variance is actually beneficial
+
+### Making LUTs Deterministic
+
+If you need identical LUTs:
+```python
+# In card_info_lut_builder.py __init__:
+import numpy as np
+np.random.seed(42)  # Fixed seed
+
+# In cluster() method:
+km = KMeans(
+    n_clusters=num_clusters,
+    init="k-means++",
+    n_init=1,  # Single run
+    random_state=42  # Fixed seed
+)
+```
+
 ## Recommendations
 
 1. **For Development**: Use test mode (fast, good enough for testing)
 2. **For Training**: Use standard mode (balanced quality/time)
 3. **For Competition**: Use high mode (maximum quality)
-4. **Monitor Progress**: Always run monitor_clustering.py
-5. **Be Patient**: Flop processing takes time but will complete
+4. **Generate Once**: Create LUT on best machine, use everywhere
+5. **Monitor Progress**: Always run monitor_clustering.py
+6. **Be Patient**: Flop processing takes time but will complete
+7. **Save Checkpoints**: Use generate_texas_holdem_lut_safe.sh for resume capability
 
 ## Next Steps
 
