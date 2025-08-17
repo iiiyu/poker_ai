@@ -17,6 +17,15 @@ echo ""
 
 # Check for existing progress
 check_existing_progress() {
+    # Debug: Show current directory and any .joblib files
+    echo -e "${BLUE}Checking directory: $(pwd)${NC}"
+    
+    # Quick check for any .joblib files
+    local joblib_count=$(ls -1 *.joblib 2>/dev/null | wc -l)
+    if [ $joblib_count -gt 0 ]; then
+        echo -e "${BLUE}Found $joblib_count .joblib file(s) in directory${NC}"
+    fi
+    
     # First check for any existing LUT files or checkpoints
     local found_files=0
     local lut_file=""
@@ -26,31 +35,50 @@ check_existing_progress() {
         lut_file="card_info_lut.joblib"
         echo -e "${YELLOW}Found existing card_info_lut.joblib${NC}"
         found_files=1
+    else
+        echo -e "${BLUE}No main LUT file (card_info_lut.joblib) found${NC}"
     fi
     
     # Check for descriptive LUT files
-    for file in texas_holdem_*_lut.joblib; do
-        if [ -f "$file" ]; then
-            echo -e "${YELLOW}Found existing LUT: $file${NC}"
-            found_files=1
-            # If no main file, could use this one
-            if [ -z "$lut_file" ] && [ "$file" != "*.joblib" ]; then
-                echo -e "${BLUE}Could restore from: $file${NC}"
-                echo -e "${BLUE}Run: cp $file card_info_lut.joblib${NC}"
+    # Use nullglob to handle no matches properly
+    shopt -s nullglob
+    texas_files=(texas_holdem_*_lut.joblib)
+    shopt -u nullglob
+    
+    if [ ${#texas_files[@]} -eq 0 ]; then
+        echo -e "${BLUE}No descriptive LUT files (texas_holdem_*_lut.joblib) found${NC}"
+    else
+        for file in "${texas_files[@]}"; do
+            if [ -f "$file" ]; then
+                echo -e "${YELLOW}Found existing LUT: $file${NC}"
+                found_files=1
+                # If no main file, could use this one
+                if [ -z "$lut_file" ]; then
+                    echo -e "${BLUE}Could restore from: $file${NC}"
+                    echo -e "${BLUE}Run: cp $file card_info_lut.joblib${NC}"
+                fi
             fi
-        fi
-    done
+        done
+    fi
     
     # Check for checkpoint files
-    for checkpoint in checkpoint_*.joblib; do
-        if [ -f "$checkpoint" ] && [ "$checkpoint" != "checkpoint_*.joblib" ]; then
-            echo -e "${YELLOW}Found checkpoint: $checkpoint${NC}"
-            found_files=1
-            # Extract stage name from checkpoint
-            stage=$(echo $checkpoint | sed 's/checkpoint_\(.*\)\.joblib/\1/')
-            echo -e "${BLUE}  Stage completed: $stage${NC}"
-        fi
-    done
+    shopt -s nullglob
+    checkpoint_files=(checkpoint_*.joblib)
+    shopt -u nullglob
+    
+    if [ ${#checkpoint_files[@]} -eq 0 ]; then
+        echo -e "${BLUE}No checkpoint files (checkpoint_*.joblib) found${NC}"
+    else
+        for checkpoint in "${checkpoint_files[@]}"; do
+            if [ -f "$checkpoint" ]; then
+                echo -e "${YELLOW}Found checkpoint: $checkpoint${NC}"
+                found_files=1
+                # Extract stage name from checkpoint
+                stage=$(echo $checkpoint | sed 's/checkpoint_\(.*\)\.joblib/\1/')
+                echo -e "${BLUE}  Stage completed: $stage${NC}"
+            fi
+        done
+    fi
     
     # If we have the main LUT file, check its contents
     if [ -f "card_info_lut.joblib" ]; then
