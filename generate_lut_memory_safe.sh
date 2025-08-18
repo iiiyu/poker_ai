@@ -1,193 +1,257 @@
 #!/bin/bash
-# Memory-efficient LUT generation script for systems with limited RAM
 
+# Memory-safe LUT generation script with multiple safety modes
+# Designed to work on systems with limited RAM
+
+set -e
+
+# Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-echo -e "${CYAN}=========================================="
-echo "   MEMORY-EFFICIENT LUT GENERATION"
-echo "   Optimized for 50GB memory limit"
-echo "==========================================${NC}"
-echo ""
+# Configuration
+DB_PATH="clustering_data.db"
+CHECKPOINT_DIR="lut_checkpoints"
+OUTPUT_FILE="card_info_lut.joblib"
 
-# Function to get available memory in GB
-get_available_memory_gb() {
-    if command -v free &> /dev/null; then
-        # Linux
+# Function to print colored messages
+print_msg() {
+    local color=$1
+    local msg=$2
+    echo -e "${color}${msg}${NC}"
+}
+
+# Function to check available memory
+check_memory() {
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         free -g | awk '/^Mem:/{print $7}'
     elif [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS - Get free + inactive memory
-        local page_size=$(pagesize)
-        local free_pages=$(vm_stat | grep "Pages free" | awk '{print $3}' | sed 's/\.//')
-        local inactive_pages=$(vm_stat | grep "Pages inactive" | awk '{print $3}' | sed 's/\.//')
-        local purgeable_pages=$(vm_stat | grep "Pages purgeable" | awk '{print $3}' | sed 's/\.//')
-        # Calculate available memory (free + inactive + purgeable)
-        echo $(( (free_pages + inactive_pages + purgeable_pages) * page_size / 1024 / 1024 / 1024 ))
-    else
-        echo "0"
-    fi
-}
-
-# Function to get total memory in GB
-get_total_memory_gb() {
-    if command -v free &> /dev/null; then
-        # Linux
-        free -g | awk '/^Mem:/{print $2}'
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS
-        echo $(($(sysctl -n hw.memsize)/1024/1024/1024))
+        vm_stat | grep "Pages free" | awk '{print int($3*4096/1024/1024/1024)}'
     else
-        echo "0"
+        echo "8"  # Default fallback
     fi
 }
 
-# Show system info
-echo -e "${BLUE}=== System Information ===${NC}"
-TOTAL_MEM=$(get_total_memory_gb)
-AVAIL_MEM=$(get_available_memory_gb)
-echo "Total memory: ${TOTAL_MEM}GB"
-echo "Available memory: ${AVAIL_MEM}GB"
-echo ""
+# Function to monitor memory during execution
+monitor_memory() {
+    local pid=$1
+    local limit=$2
+    
+    while kill -0 $pid 2>/dev/null; do
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            mem_usage=$(ps -o rss= -p $pid | awk '{print int($1/1024/1024)}')
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            mem_usage=$(ps -o rss= -p $pid | awk '{print int($1/1024)}')
+        fi
+        
+        if [ ! -z "$mem_usage" ] && [ "$mem_usage" -gt "$((limit * 1024))" ]; then
+            print_msg $RED "⚠️  Memory limit exceeded! (${mem_usage}MB > ${limit}GB)"
+            kill -TERM $pid 2>/dev/null
+            return 1
+        fi
+        sleep 5
+    done
+}
 
-# Parse mode
-MODE="${1:-auto}"
+# Parse command line arguments
+MODE=${1:-auto}
 
-# Auto-detect optimal settings based on available memory
-if [ "$MODE" == "auto" ]; then
-    if [ $AVAIL_MEM -ge 50 ]; then
-        MODE="ultra"
-    elif [ $AVAIL_MEM -ge 40 ]; then
-        MODE="high"
-    elif [ $AVAIL_MEM -ge 20 ]; then
-        MODE="medium"
-    elif [ $AVAIL_MEM -ge 10 ]; then
-        MODE="low"
-    else
-        MODE="minimal"
+print_msg $BLUE "
+==========================================
+  Memory-Safe LUT Generator
+  Mode: $MODE
+==========================================
+"
+
+# Check if database exists (resuming)
+if [ -f "$DB_PATH" ]; then
+    print_msg $YELLOW "Found existing database. Checking progress..."
+    
+    # Check progress
+    PROGRESS=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM turn_data WHERE distribution IS NOT NULL" 2>/dev/null || echo "0")
+    TOTAL=$(sqlite3 "$DB_PATH" "SELECT COUNT(DISTINCT combo) FROM turn_data" 2>/dev/null || echo "1326")
+    
+    if [ "$PROGRESS" -gt 0 ]; then
+        PERCENT=$((PROGRESS * 100 / TOTAL))
+        print_msg $YELLOW "Progress: $PROGRESS/$TOTAL ($PERCENT%)"
+        
+        if [ "$PERCENT" -ge 98 ] && [ "$MODE" != "finalize" ]; then
+            print_msg $YELLOW "Turn processing nearly complete. Switching to recovery mode..."
+            MODE="recover"
+        fi
     fi
-    echo -e "${GREEN}Auto-selected mode: $MODE (based on ${AVAIL_MEM}GB available)${NC}"
 fi
 
-# Configuration based on mode
+# Detect available memory
+AVAILABLE_MEM=$(check_memory)
+print_msg $BLUE "Available memory: ${AVAILABLE_MEM}GB"
+
+# Set parameters based on mode
 case $MODE in
-    minimal)
-        echo -e "${RED}Mode: MINIMAL (5GB memory usage)${NC}"
-        RIVER_CLUSTERS=50
+    emergency)
+        print_msg $RED "🚨 EMERGENCY MODE - Minimal memory usage"
+        MEMORY_LIMIT=3
+        BATCH_SIZE=5
+        SIMULATIONS=100
+        RIVER_CLUSTERS=10
         TURN_CLUSTERS=50
-        FLOP_CLUSTERS=50
-        SIMULATIONS=2
-        MEMORY_LIMIT=5
+        FLOP_CLUSTERS=150
+        SAFETY_FACTOR=0.5
+        CHUNK_SIZE=50
         ;;
-    low)
-        echo -e "${YELLOW}Mode: LOW (8GB memory usage)${NC}"
-        RIVER_CLUSTERS=100
+    
+    safe)
+        print_msg $YELLOW "🛡️  SAFE MODE - Conservative memory usage"
+        MEMORY_LIMIT=$((AVAILABLE_MEM * 6 / 10))
+        BATCH_SIZE=10
+        SIMULATIONS=200
+        RIVER_CLUSTERS=15
         TURN_CLUSTERS=75
-        FLOP_CLUSTERS=75
-        SIMULATIONS=3
-        MEMORY_LIMIT=8
-        ;;
-    medium)
-        echo -e "${GREEN}Mode: MEDIUM (20GB memory usage)${NC}"
-        RIVER_CLUSTERS=150
-        TURN_CLUSTERS=100
-        FLOP_CLUSTERS=100
-        SIMULATIONS=8
-        MEMORY_LIMIT=20
-        ;;
-    high)
-        echo -e "${GREEN}Mode: HIGH (45GB memory usage)${NC}"
-        RIVER_CLUSTERS=300
-        TURN_CLUSTERS=200
         FLOP_CLUSTERS=200
-        SIMULATIONS=15
-        MEMORY_LIMIT=45
+        SAFETY_FACTOR=0.6
+        CHUNK_SIZE=75
         ;;
-    ultra)
-        echo -e "${CYAN}Mode: ULTRA (50GB memory usage)${NC}"
-        echo -e "${CYAN}Optimized for your 63GB system${NC}"
-        RIVER_CLUSTERS=400
-        TURN_CLUSTERS=300
-        FLOP_CLUSTERS=300
-        SIMULATIONS=20
-        MEMORY_LIMIT=50
+    
+    low)
+        print_msg $GREEN "💾 LOW MODE - Reduced quality for faster generation"
+        MEMORY_LIMIT=$((AVAILABLE_MEM * 7 / 10))
+        BATCH_SIZE=20
+        SIMULATIONS=500
+        RIVER_CLUSTERS=20
+        TURN_CLUSTERS=100
+        FLOP_CLUSTERS=250
+        SAFETY_FACTOR=0.7
+        CHUNK_SIZE=100
         ;;
-    custom)
-        echo -e "${BLUE}Mode: CUSTOM${NC}"
-        RIVER_CLUSTERS="${2:-200}"
-        TURN_CLUSTERS="${3:-200}"
-        FLOP_CLUSTERS="${4:-200}"
-        SIMULATIONS="${5:-10}"
-        MEMORY_LIMIT="${6:-50}"
+    
+    high)
+        print_msg $GREEN "⚡ HIGH MODE - Better quality, more memory"
+        MEMORY_LIMIT=$((AVAILABLE_MEM * 8 / 10))
+        BATCH_SIZE=50
+        SIMULATIONS=2000
+        RIVER_CLUSTERS=50
+        TURN_CLUSTERS=200
+        FLOP_CLUSTERS=500
+        SAFETY_FACTOR=0.8
+        CHUNK_SIZE=150
         ;;
+    
+    auto)
+        print_msg $BLUE "🤖 AUTO MODE - Selecting based on available memory"
+        if [ "$AVAILABLE_MEM" -lt 5 ]; then
+            MODE="emergency"
+            exec $0 emergency
+        elif [ "$AVAILABLE_MEM" -lt 10 ]; then
+            MODE="safe"
+            exec $0 safe
+        elif [ "$AVAILABLE_MEM" -lt 20 ]; then
+            MODE="low"
+            exec $0 low
+        else
+            MODE="high"
+            exec $0 high
+        fi
+        ;;
+    
+    recover)
+        print_msg $YELLOW "🔧 RECOVERY MODE - Completing failed generation"
+        python3 complete_turn_recovery.py --db "$DB_PATH" --memory 3
+        exit_code=$?
+        
+        if [ $exit_code -eq 0 ]; then
+            print_msg $GREEN "✅ Recovery successful! Run with 'finalize' to create LUT file"
+        else
+            print_msg $RED "❌ Recovery failed. Try 'emergency' mode"
+        fi
+        exit $exit_code
+        ;;
+    
+    finalize)
+        print_msg $BLUE "📦 FINALIZE MODE - Creating LUT file from database"
+        python3 -c "
+import sys
+sys.path.insert(0, '.')
+from poker_ai.clustering.memory_safe_builder import MemorySafeUnifiedBuilder
+
+builder = MemorySafeUnifiedBuilder(
+    n_simulations_river=100,
+    n_simulations_turn=100,
+    n_simulations_flop=100,
+    low_card_rank=2,
+    high_card_rank=14,
+    save_dir='.',
+    n_river_clusters=10,
+    n_turn_clusters=50,
+    n_flop_clusters=150,
+    memory_limit_gb=3,
+    batch_size=1,
+    db_path='$DB_PATH',
+    checkpoint_dir='$CHECKPOINT_DIR',
+    safety_factor=0.5,
+    chunk_size=50
+)
+
+print('Creating final LUT file...')
+builder._save_lut()
+print('✅ LUT file created successfully!')
+"
+        exit $?
+        ;;
+    
+    test)
+        print_msg $YELLOW "🧪 TEST MODE - Quick generation for testing"
+        MEMORY_LIMIT=2
+        BATCH_SIZE=2
+        SIMULATIONS=50
+        RIVER_CLUSTERS=5
+        TURN_CLUSTERS=10
+        FLOP_CLUSTERS=20
+        SAFETY_FACTOR=0.5
+        CHUNK_SIZE=20
+        ;;
+    
     *)
-        echo -e "${RED}Unknown mode: $MODE${NC}"
-        echo "Usage: $0 [minimal|low|medium|high|ultra|custom] [river_clusters] [turn_clusters] [flop_clusters] [simulations] [memory_limit]"
-        echo ""
-        echo "Examples:"
-        echo "  $0 auto              # Auto-detect based on available memory"
-        echo "  $0 minimal           # Use minimal settings (5GB)"
-        echo "  $0 low               # Use low settings (8GB)"
-        echo "  $0 ultra             # Use ultra settings (50GB)"
-        echo "  $0 custom 300 200 200 15 45  # Custom settings"
+        print_msg $RED "Unknown mode: $MODE"
+        echo "Usage: $0 [emergency|safe|low|high|auto|recover|finalize|test]"
         exit 1
         ;;
 esac
 
-echo ""
-echo -e "${BLUE}=== Configuration ===${NC}"
-echo "River clusters: $RIVER_CLUSTERS"
-echo "Turn clusters: $TURN_CLUSTERS"
-echo "Flop clusters: $FLOP_CLUSTERS"
-echo "Simulations: $SIMULATIONS"
-echo "Memory limit: ${MEMORY_LIMIT}GB"
-echo ""
+# Display configuration
+print_msg $BLUE "
+Configuration:
+- Memory Limit: ${MEMORY_LIMIT}GB
+- Batch Size: $BATCH_SIZE
+- Simulations: $SIMULATIONS
+- River Clusters: $RIVER_CLUSTERS
+- Turn Clusters: $TURN_CLUSTERS
+- Flop Clusters: $FLOP_CLUSTERS
+- Safety Factor: $SAFETY_FACTOR
+- Chunk Size: $CHUNK_SIZE
+"
 
-# Check for existing checkpoints
-CHECKPOINT_DIR="lut_checkpoints"
-if [ -d "$CHECKPOINT_DIR" ]; then
-    echo -e "${YELLOW}Found checkpoint directory${NC}"
-    CHECKPOINT_COUNT=$(ls -1 $CHECKPOINT_DIR/*.joblib 2>/dev/null | wc -l)
-    if [ $CHECKPOINT_COUNT -gt 0 ]; then
-        echo -e "${GREEN}Found $CHECKPOINT_COUNT checkpoint files${NC}"
-        echo "Will resume from checkpoints if available"
-    fi
-fi
-echo ""
+# Create checkpoint directory
+mkdir -p "$CHECKPOINT_DIR"
 
-# Safety check
-if [ $MEMORY_LIMIT -gt $AVAIL_MEM ]; then
-    echo -e "${RED}WARNING: Requested memory (${MEMORY_LIMIT}GB) exceeds available (${AVAIL_MEM}GB)${NC}"
-    echo -e "${YELLOW}Continue anyway? (y/n)${NC}"
-    read -r response
-    if [[ ! "$response" =~ ^[Yy]$ ]]; then
-        echo "Aborted."
-        exit 1
-    fi
-fi
+# Start generation with memory monitoring
+print_msg $GREEN "Starting generation..."
 
-echo -e "${YELLOW}Starting generation in 5 seconds... (Ctrl+C to cancel)${NC}"
-sleep 5
-
-echo ""
-echo -e "${GREEN}Running memory-efficient LUT builder...${NC}"
-echo ""
-
-# Run the memory-efficient builder
+# Run Python script in background
 python3 -c "
 import sys
 import os
 sys.path.insert(0, '.')
 
-# Use IncrementalTurnProcessor for better memory handling
-from poker_ai.clustering.incremental_turn_processor import IncrementalTurnProcessor
+# Use memory-safe builder
+from poker_ai.clustering.memory_safe_builder import MemorySafeUnifiedBuilder
 
-print('Initializing incremental processor with database backing...')
+print('Initializing memory-safe builder...')
 
-builder = IncrementalTurnProcessor(
+builder = MemorySafeUnifiedBuilder(
     n_simulations_river=${SIMULATIONS},
     n_simulations_turn=${SIMULATIONS},
     n_simulations_flop=${SIMULATIONS},
@@ -198,54 +262,73 @@ builder = IncrementalTurnProcessor(
     n_turn_clusters=${TURN_CLUSTERS},
     n_flop_clusters=${FLOP_CLUSTERS},
     memory_limit_gb=${MEMORY_LIMIT},
-    checkpoint_dir='${CHECKPOINT_DIR}'
+    batch_size=${BATCH_SIZE},
+    db_path='${DB_PATH}',
+    checkpoint_dir='${CHECKPOINT_DIR}',
+    safety_factor=${SAFETY_FACTOR},
+    chunk_size=${CHUNK_SIZE}
 )
 
-print('Starting build process...')
-builder.build()
+print('Starting clustering process...')
+builder.compute(
+    n_river_clusters=${RIVER_CLUSTERS},
+    n_turn_clusters=${TURN_CLUSTERS},
+    n_flop_clusters=${FLOP_CLUSTERS}
+)
+
+print('Cleaning up...')
+builder.cleanup()
 print('Done!')
+" &
+
+PID=$!
+
+# Monitor memory usage
+monitor_memory $PID $MEMORY_LIMIT &
+MONITOR_PID=$!
+
+# Wait for main process
+wait $PID
+exit_code=$?
+
+# Kill monitor if still running
+kill $MONITOR_PID 2>/dev/null || true
+
+# Check exit status
+if [ $exit_code -eq 0 ]; then
+    print_msg $GREEN "
+==========================================
+✅ Generation completed successfully!
+==========================================
 "
-
-RESULT=$?
-
-if [ $RESULT -eq 0 ]; then
-    echo ""
-    echo -e "${GREEN}=========================================="
-    echo "✅ LUT GENERATION SUCCESSFUL!"
-    echo "==========================================${NC}"
     
-    # Show file sizes
-    if [ -f "card_info_lut.joblib" ]; then
-        SIZE=$(ls -lh card_info_lut.joblib | awk '{print $5}')
-        echo "LUT file: card_info_lut.joblib ($SIZE)"
+    if [ -f "$OUTPUT_FILE" ]; then
+        SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
+        print_msg $GREEN "LUT file created: $OUTPUT_FILE ($SIZE)"
     fi
-    
-    if [ -f "centroids.joblib" ]; then
-        SIZE=$(ls -lh centroids.joblib | awk '{print $5}')
-        echo "Centroids: centroids.joblib ($SIZE)"
-    fi
-    
-    echo ""
-    echo "You can now train with: ./train_ai.sh"
 else
-    echo ""
-    echo -e "${RED}=========================================="
-    echo "❌ Generation failed with code $RESULT"
-    echo "==========================================${NC}"
-    echo ""
-    echo "Troubleshooting:"
-    echo "1. Check memory usage with: free -h"
-    echo "2. Try a lower quality mode: $0 medium"
-    echo "3. Check for Python errors above"
-    echo "4. Ensure psutil is installed: pip install psutil"
+    print_msg $RED "
+==========================================
+❌ Generation failed with code $exit_code
+==========================================
+"
     
-    # Check for checkpoints
-    if [ -d "$CHECKPOINT_DIR" ]; then
-        CHECKPOINT_COUNT=$(ls -1 $CHECKPOINT_DIR/*.joblib 2>/dev/null | wc -l)
-        if [ $CHECKPOINT_COUNT -gt 0 ]; then
-            echo ""
-            echo -e "${YELLOW}Found $CHECKPOINT_COUNT checkpoint files${NC}"
-            echo "Progress was saved. Run again to resume."
-        fi
+    if [ $exit_code -eq 137 ]; then
+        print_msg $YELLOW "
+Memory limit exceeded (OOM kill). Try:
+1. Run recovery: $0 recover
+2. Use emergency mode: $0 emergency
+3. Check memory with: free -h
+"
+    else
+        print_msg $YELLOW "
+Troubleshooting:
+1. Check memory usage with: free -h
+2. Try recovery mode: $0 recover
+3. Try emergency mode: $0 emergency
+4. Check Python errors above
+"
     fi
 fi
+
+exit $exit_code
