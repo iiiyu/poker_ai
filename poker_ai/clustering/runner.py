@@ -34,7 +34,7 @@ Options:
 """
 import click
 
-from poker_ai.clustering.card_info_lut_builder import CardInfoLutBuilder
+from poker_ai.clustering.unified_builder import UnifiedLUTBuilder
 
 
 @click.command()
@@ -110,6 +110,21 @@ from poker_ai.clustering.card_info_lut_builder import CardInfoLutBuilder
         "centroids."
     )
 )
+@click.option(
+    "--memory_limit_gb",
+    default=50.0,
+    help="Maximum memory usage in GB. Default 50GB."
+)
+@click.option(
+    "--batch_size",
+    default=50,
+    help="Batch size for processing. Default 50."
+)
+@click.option(
+    "--chunk_size",
+    default=10,
+    help="Chunk size for database flushing. Default 10."
+)
 def cluster(
     low_card_rank: int,
     high_card_rank: int,
@@ -120,21 +135,26 @@ def cluster(
     n_simulations_turn: int,
     n_simulations_flop: int,
     save_dir: str,
+    memory_limit_gb: float,
+    batch_size: int,
+    chunk_size: int,
 ):
-    """Run clustering."""
-    builder = CardInfoLutBuilder(
-        n_simulations_river,
-        n_simulations_turn,
-        n_simulations_flop,
-        low_card_rank,
-        high_card_rank,
-        save_dir
-    )
-    builder.compute(
-        n_river_clusters,
-        n_turn_clusters,
-        n_flop_clusters,
-    )
+    """Run clustering with unified memory-safe builder."""
+    with UnifiedLUTBuilder(
+        n_simulations_river=n_simulations_river,
+        n_simulations_turn=n_simulations_turn,
+        n_simulations_flop=n_simulations_flop,
+        low_card_rank=low_card_rank,
+        high_card_rank=high_card_rank,
+        n_river_clusters=n_river_clusters,
+        n_turn_clusters=n_turn_clusters,
+        n_flop_clusters=n_flop_clusters,
+        memory_limit_gb=memory_limit_gb,
+        batch_size=batch_size,
+        chunk_size=chunk_size,
+        save_dir=save_dir if save_dir else "."
+    ) as builder:
+        builder.compute()
 
 
 if __name__ == "__main__":

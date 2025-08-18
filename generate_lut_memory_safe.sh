@@ -101,7 +101,7 @@ case $MODE in
         TURN_CLUSTERS=50
         FLOP_CLUSTERS=150
         SAFETY_FACTOR=0.5
-        CHUNK_SIZE=50
+        CHUNK_SIZE=10
         ;;
     
     safe)
@@ -113,7 +113,7 @@ case $MODE in
         TURN_CLUSTERS=75
         FLOP_CLUSTERS=200
         SAFETY_FACTOR=0.6
-        CHUNK_SIZE=75
+        CHUNK_SIZE=10
         ;;
     
     low)
@@ -125,7 +125,7 @@ case $MODE in
         TURN_CLUSTERS=100
         FLOP_CLUSTERS=250
         SAFETY_FACTOR=0.7
-        CHUNK_SIZE=100
+        CHUNK_SIZE=10
         ;;
     
     high)
@@ -137,7 +137,7 @@ case $MODE in
         TURN_CLUSTERS=200
         FLOP_CLUSTERS=500
         SAFETY_FACTOR=0.8
-        CHUNK_SIZE=150
+        CHUNK_SIZE=10
         ;;
     
     auto)
@@ -175,9 +175,9 @@ case $MODE in
         python3 -c "
 import sys
 sys.path.insert(0, '.')
-from poker_ai.clustering.memory_safe_builder import MemorySafeUnifiedBuilder
+from poker_ai.clustering.unified_builder import UnifiedLUTBuilder
 
-builder = MemorySafeUnifiedBuilder(
+builder = UnifiedLUTBuilder(
     n_simulations_river=100,
     n_simulations_turn=100,
     n_simulations_flop=100,
@@ -191,8 +191,8 @@ builder = MemorySafeUnifiedBuilder(
     batch_size=1,
     db_path='$DB_PATH',
     checkpoint_dir='$CHECKPOINT_DIR',
-    safety_factor=0.5,
-    chunk_size=50
+    memory_safety_factor=0.5,
+    chunk_size=10
 )
 
 print('Creating final LUT file...')
@@ -246,12 +246,12 @@ import sys
 import os
 sys.path.insert(0, '.')
 
-# Use memory-safe builder
-from poker_ai.clustering.memory_safe_builder import MemorySafeUnifiedBuilder
+# Use unified builder
+from poker_ai.clustering.unified_builder import UnifiedLUTBuilder
 
-print('Initializing memory-safe builder...')
+print('Initializing unified builder...')
 
-builder = MemorySafeUnifiedBuilder(
+builder = UnifiedLUTBuilder(
     n_simulations_river=${SIMULATIONS},
     n_simulations_turn=${SIMULATIONS},
     n_simulations_flop=${SIMULATIONS},
@@ -265,16 +265,12 @@ builder = MemorySafeUnifiedBuilder(
     batch_size=${BATCH_SIZE},
     db_path='${DB_PATH}',
     checkpoint_dir='${CHECKPOINT_DIR}',
-    safety_factor=${SAFETY_FACTOR},
+    memory_safety_factor=${SAFETY_FACTOR},
     chunk_size=${CHUNK_SIZE}
 )
 
 print('Starting clustering process...')
-builder.compute(
-    n_river_clusters=${RIVER_CLUSTERS},
-    n_turn_clusters=${TURN_CLUSTERS},
-    n_flop_clusters=${FLOP_CLUSTERS}
-)
+builder.compute()
 
 print('Cleaning up...')
 builder.cleanup()

@@ -1,0 +1,69 @@
+# DEPRECATED FILES - To Be Removed
+
+The following files are deprecated and replaced by the new unified architecture:
+
+## Files to Remove (After Migration)
+
+1. **card_info_lut_builder.py** (441 lines)
+   - Replaced by: unified_builder.py
+   - Reason: Base implementation with memory issues
+
+2. **card_info_lut_builder_extended.py** (99 lines)
+   - Replaced by: unified_builder.py
+   - Reason: Minor extension, functionality merged
+
+3. **memory_efficient_builder.py** (470 lines)
+   - Replaced by: unified_builder.py + core/memory_manager.py
+   - Reason: Chunk-based processing now in storage_backend.py
+
+4. **memory_safe_builder.py** (226 lines)
+   - Replaced by: unified_builder.py
+   - Reason: Memory safety now handled by memory_manager.py
+
+5. **memory_safe_unified_builder.py** (543 lines)
+   - Replaced by: unified_builder.py
+   - Reason: Streaming functionality moved to processors/
+
+6. **unified_sqlite_builder.py** (769 lines)
+   - Replaced by: core/storage_backend.py
+   - Reason: SQLite functionality extracted and improved
+
+7. **incremental_turn_processor.py** (partial implementation)
+   - Replaced by: processors/turn_processor.py
+   - Reason: Incomplete, functionality completed in new processor
+
+8. **migrate_to_unified.py** (one-time migration)
+   - No longer needed
+   - Reason: One-time migration script
+
+## Migration Command
+
+To safely remove deprecated files after confirming migration:
+
+```bash
+# First, backup the files
+mkdir -p backup_deprecated
+cp poker_ai/clustering/card_info_lut_builder.py backup_deprecated/
+cp poker_ai/clustering/card_info_lut_builder_extended.py backup_deprecated/
+cp poker_ai/clustering/memory_efficient_builder.py backup_deprecated/
+cp poker_ai/clustering/memory_safe_builder.py backup_deprecated/
+cp poker_ai/clustering/memory_safe_unified_builder.py backup_deprecated/
+cp poker_ai/clustering/unified_sqlite_builder.py backup_deprecated/
+cp poker_ai/clustering/incremental_turn_processor.py backup_deprecated/ 2>/dev/null
+cp poker_ai/clustering/migrate_to_unified.py backup_deprecated/ 2>/dev/null
+
+# Then remove (only after testing new architecture)
+rm poker_ai/clustering/card_info_lut_builder.py
+rm poker_ai/clustering/card_info_lut_builder_extended.py
+rm poker_ai/clustering/memory_efficient_builder.py
+rm poker_ai/clustering/memory_safe_builder.py
+rm poker_ai/clustering/memory_safe_unified_builder.py
+rm poker_ai/clustering/unified_sqlite_builder.py
+rm poker_ai/clustering/incremental_turn_processor.py 2>/dev/null
+rm poker_ai/clustering/migrate_to_unified.py 2>/dev/null
+```
+
+## Total Lines Removed: ~2500+ lines of redundant code
+## New Architecture: ~800 lines of clean, maintainable code
+
+## See MIGRATION_GUIDE.md for detailed migration instructions
