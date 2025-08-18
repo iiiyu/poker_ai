@@ -1,5 +1,6 @@
 #!/bin/bash
-# Memory-efficient LUT generation script for systems with limited RAM
+# Unified SQLite-backed LUT generation script
+# Uses database backing for ALL stages to prevent memory issues
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -9,8 +10,8 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${CYAN}=========================================="
-echo "   MEMORY-EFFICIENT LUT GENERATION"
-echo "   Optimized for 50GB memory limit"
+echo "   UNIFIED SQLite LUT GENERATION"
+echo "   Database-backed for all stages"
 echo "==========================================${NC}"
 echo ""
 
@@ -25,7 +26,7 @@ get_available_memory_gb() {
         local free_pages=$(vm_stat | grep "Pages free" | awk '{print $3}' | sed 's/\.//')
         local inactive_pages=$(vm_stat | grep "Pages inactive" | awk '{print $3}' | sed 's/\.//')
         local purgeable_pages=$(vm_stat | grep "Pages purgeable" | awk '{print $3}' | sed 's/\.//')
-        # Calculate available memory (free + inactive + purgeable)
+        # Calculate available memory
         echo $(( (free_pages + inactive_pages + purgeable_pages) * page_size / 1024 / 1024 / 1024 ))
     else
         echo "0"
@@ -81,6 +82,7 @@ case $MODE in
         FLOP_CLUSTERS=50
         SIMULATIONS=2
         MEMORY_LIMIT=5
+        BATCH_SIZE=20
         ;;
     low)
         echo -e "${YELLOW}Mode: LOW (8GB memory usage)${NC}"
@@ -89,6 +91,7 @@ case $MODE in
         FLOP_CLUSTERS=75
         SIMULATIONS=3
         MEMORY_LIMIT=8
+        BATCH_SIZE=30
         ;;
     medium)
         echo -e "${GREEN}Mode: MEDIUM (20GB memory usage)${NC}"
@@ -97,6 +100,7 @@ case $MODE in
         FLOP_CLUSTERS=100
         SIMULATIONS=8
         MEMORY_LIMIT=20
+        BATCH_SIZE=50
         ;;
     high)
         echo -e "${GREEN}Mode: HIGH (45GB memory usage)${NC}"
@@ -105,6 +109,7 @@ case $MODE in
         FLOP_CLUSTERS=200
         SIMULATIONS=15
         MEMORY_LIMIT=45
+        BATCH_SIZE=50
         ;;
     ultra)
         echo -e "${CYAN}Mode: ULTRA (50GB memory usage)${NC}"
@@ -114,6 +119,7 @@ case $MODE in
         FLOP_CLUSTERS=300
         SIMULATIONS=20
         MEMORY_LIMIT=50
+        BATCH_SIZE=50
         ;;
     custom)
         echo -e "${BLUE}Mode: CUSTOM${NC}"
@@ -122,17 +128,17 @@ case $MODE in
         FLOP_CLUSTERS="${4:-200}"
         SIMULATIONS="${5:-10}"
         MEMORY_LIMIT="${6:-50}"
+        BATCH_SIZE="${7:-50}"
         ;;
     *)
         echo -e "${RED}Unknown mode: $MODE${NC}"
-        echo "Usage: $0 [minimal|low|medium|high|ultra|custom] [river_clusters] [turn_clusters] [flop_clusters] [simulations] [memory_limit]"
+        echo "Usage: $0 [minimal|low|medium|high|ultra|custom] [river_clusters] [turn_clusters] [flop_clusters] [simulations] [memory_limit] [batch_size]"
         echo ""
         echo "Examples:"
         echo "  $0 auto              # Auto-detect based on available memory"
         echo "  $0 minimal           # Use minimal settings (5GB)"
-        echo "  $0 low               # Use low settings (8GB)"
         echo "  $0 ultra             # Use ultra settings (50GB)"
-        echo "  $0 custom 300 200 200 15 45  # Custom settings"
+        echo "  $0 custom 300 200 200 15 45 50  # Custom settings"
         exit 1
         ;;
 esac
@@ -144,16 +150,23 @@ echo "Turn clusters: $TURN_CLUSTERS"
 echo "Flop clusters: $FLOP_CLUSTERS"
 echo "Simulations: $SIMULATIONS"
 echo "Memory limit: ${MEMORY_LIMIT}GB"
+echo "Batch size: $BATCH_SIZE"
 echo ""
 
-# Check for existing checkpoints
+# Check for existing database
+DB_PATH="clustering_data.db"
 CHECKPOINT_DIR="lut_checkpoints"
+
+if [ -f "$DB_PATH" ]; then
+    DB_SIZE=$(ls -lh $DB_PATH | awk '{print $5}')
+    echo -e "${YELLOW}Found existing database: $DB_PATH ($DB_SIZE)${NC}"
+    echo "Will resume from checkpoints if available"
+fi
+
 if [ -d "$CHECKPOINT_DIR" ]; then
-    echo -e "${YELLOW}Found checkpoint directory${NC}"
     CHECKPOINT_COUNT=$(ls -1 $CHECKPOINT_DIR/*.joblib 2>/dev/null | wc -l)
     if [ $CHECKPOINT_COUNT -gt 0 ]; then
         echo -e "${GREEN}Found $CHECKPOINT_COUNT checkpoint files${NC}"
-        echo "Will resume from checkpoints if available"
     fi
 fi
 echo ""
@@ -173,21 +186,20 @@ echo -e "${YELLOW}Starting generation in 5 seconds... (Ctrl+C to cancel)${NC}"
 sleep 5
 
 echo ""
-echo -e "${GREEN}Running memory-efficient LUT builder...${NC}"
+echo -e "${GREEN}Running unified SQLite-backed LUT builder...${NC}"
 echo ""
 
-# Run the memory-efficient builder
+# Run the unified builder
 python3 -c "
 import sys
 import os
 sys.path.insert(0, '.')
 
-# Use IncrementalTurnProcessor for better memory handling
-from poker_ai.clustering.incremental_turn_processor import IncrementalTurnProcessor
+from poker_ai.clustering.unified_sqlite_builder import UnifiedSQLiteLUTBuilder
 
-print('Initializing incremental processor with database backing...')
+print('Initializing unified SQLite builder...')
 
-builder = IncrementalTurnProcessor(
+builder = UnifiedSQLiteLUTBuilder(
     n_simulations_river=${SIMULATIONS},
     n_simulations_turn=${SIMULATIONS},
     n_simulations_flop=${SIMULATIONS},
@@ -198,11 +210,20 @@ builder = IncrementalTurnProcessor(
     n_turn_clusters=${TURN_CLUSTERS},
     n_flop_clusters=${FLOP_CLUSTERS},
     memory_limit_gb=${MEMORY_LIMIT},
+    batch_size=${BATCH_SIZE},
+    db_path='${DB_PATH}',
     checkpoint_dir='${CHECKPOINT_DIR}'
 )
 
-print('Starting build process...')
-builder.build()
+print('Starting clustering process...')
+builder.compute(
+    n_river_clusters=${RIVER_CLUSTERS},
+    n_turn_clusters=${TURN_CLUSTERS},
+    n_flop_clusters=${FLOP_CLUSTERS}
+)
+
+print('Cleaning up...')
+builder.cleanup()
 print('Done!')
 "
 
@@ -225,6 +246,14 @@ if [ $RESULT -eq 0 ]; then
         echo "Centroids: centroids.joblib ($SIZE)"
     fi
     
+    if [ -f "$DB_PATH" ]; then
+        SIZE=$(ls -lh $DB_PATH | awk '{print $5}')
+        echo ""
+        echo -e "${YELLOW}Database file: $DB_PATH ($SIZE)${NC}"
+        echo "You can delete this file to free disk space:"
+        echo "  rm $DB_PATH"
+    fi
+    
     echo ""
     echo "You can now train with: ./train_ai.sh"
 else
@@ -235,17 +264,15 @@ else
     echo ""
     echo "Troubleshooting:"
     echo "1. Check memory usage with: free -h"
-    echo "2. Try a lower quality mode: $0 medium"
+    echo "2. Try a lower quality mode: $0 low"
     echo "3. Check for Python errors above"
-    echo "4. Ensure psutil is installed: pip install psutil"
+    echo "4. Database allows resuming - just run again"
     
-    # Check for checkpoints
-    if [ -d "$CHECKPOINT_DIR" ]; then
-        CHECKPOINT_COUNT=$(ls -1 $CHECKPOINT_DIR/*.joblib 2>/dev/null | wc -l)
-        if [ $CHECKPOINT_COUNT -gt 0 ]; then
-            echo ""
-            echo -e "${YELLOW}Found $CHECKPOINT_COUNT checkpoint files${NC}"
-            echo "Progress was saved. Run again to resume."
-        fi
+    # Check for database
+    if [ -f "$DB_PATH" ]; then
+        SIZE=$(ls -lh $DB_PATH | awk '{print $5}')
+        echo ""
+        echo -e "${YELLOW}Database exists: $DB_PATH ($SIZE)${NC}"
+        echo "Progress was saved. Run again to resume."
     fi
 fi

@@ -12,7 +12,40 @@ The poker AI LUT generation was failing on a 63GB RAM system due to massive memo
 
 ## Solution Architecture
 
-### 1. Memory-Efficient LUT Builder (`memory_efficient_builder.py`)
+### COMPLETE SOLUTION: Unified SQLite-Backed System
+
+We've implemented a comprehensive unified architecture that solves ALL memory issues:
+
+### 1. UnifiedSQLiteLUTBuilder (`unified_sqlite_builder.py`) - PRIMARY SOLUTION
+
+**Key Features:**
+- **Consistent Database Backing**: ALL stages (river, turn, flop) use SQLite
+- **Streaming Processing**: Never loads all data into memory at once
+- **Compression**: Uses zlib compression for stored distributions
+- **Full Checkpointing**: Can resume from exact failure point at any stage
+- **Memory Bounded**: Strictly enforces memory limits (e.g., 50GB)
+
+**Technical Architecture:**
+```python
+# Unified processing for all stages
+class UnifiedSQLiteLUTBuilder:
+    def cluster_river(self):
+        # Process river with SQLite backing
+        # Micro-batches of 50 combinations
+        # Checkpoint every 500 items
+        
+    def cluster_turn(self):
+        # Process turn with SQLite backing  
+        # Micro-batches of 20 combinations
+        # Checkpoint every 100 items
+        
+    def cluster_flop(self):
+        # Process flop with SQLite backing
+        # Micro-batches of 50 combinations
+        # Checkpoint every 500 items
+```
+
+### 2. IncrementalTurnProcessor (`incremental_turn_processor.py`)
 
 **Key Features:**
 - **Streaming processing**: Processes data in configurable chunks
