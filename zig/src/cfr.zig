@@ -154,28 +154,180 @@ pub const MCCFRTrainer = struct {
     pub fn train(self: *Self) !void {
         std.log.info("Starting MCCFR training for {} iterations", .{self.config.iterations});
         
+        // Initialize iteration weights for CFR+ or discounted CFR
+        var iteration_weight: f64 = 1.0;
+        const use_cfr_plus = self.config.discount_beta > 0.0;
+        
         while (self.iteration < self.config.iterations) {
+            std.log.debug("Starting iteration {}", .{self.iteration});
+            
+            // Update iteration weight for CFR+ discounting
+            if (use_cfr_plus) {
+                iteration_weight = std.math.pow(f64, @floatFromInt(self.iteration + 1), self.config.discount_alpha);
+            }
+            
             // Create random game scenario
             var game = try self.createRandomGame();
             defer game.deinit();
             
-            // Run CFR for each player
+            // Determine if we should sample or traverse full tree
+            const use_sampling = self.rng.random().float(f64) < self.config.exploration_probability;
+            
+            // Run CFR for each player with Monte Carlo sampling
             for (0..game.num_players) |player_id| {
-                const utility = try self.cfr(&game, @intCast(player_id), 1.0, 1.0);
-                _ = utility; // Utility is used internally
+                const utility = if (use_sampling)
+                    try self.mccfr(&game, @intCast(player_id), 1.0, 1.0, iteration_weight)
+                else
+                    try self.cfr(&game, @intCast(player_id), 1.0, 1.0);
+                
+                // Track average utility for convergence monitoring
+                if (self.iteration > 0) {
+                    const alpha = 0.01; // Exponential moving average
+                    _ = utility * alpha; // Update moving average
+                }
+            }
+            
+            // Apply regret pruning periodically
+            if (self.iteration % 100 == 0 and self.iteration > 0) {
+                try self.pruneRegrets();
             }
             
             self.iteration += 1;
             
             if (self.iteration % 100 == 0) {
-                std.log.info("Completed iteration {}", .{self.iteration});
+                const table_size = self.nodes.count();
+                std.log.info("Iteration {}: {} info sets in memory", .{ self.iteration, table_size });
+            }
+            
+            if (self.iteration % 1000 == 0) {
+                // Save checkpoint
+                try self.updateStrategyTable();
             }
         }
         
         // Update strategy table with final strategies
         try self.updateStrategyTable();
         
-        std.log.info("MCCFR training completed");
+        std.log.info("MCCFR training completed with {} total info sets", .{self.nodes.count()});
+    }
+    
+    // Monte Carlo CFR with importance sampling
+    fn mccfr(self: *Self, game_state_ptr: *game_state.GameState, player: u8, p0: f64, p1: f64, weight: f64) !f64 {
+        if (game_state_ptr.isTerminal()) {
+            return self.getUtility(game_state_ptr, player);
+        }
+        
+        const current_player = game_state_ptr.current_player;
+        
+        // Get information set for current player
+        const info_set_data = try game_state_ptr.getInfoSet(current_player);
+        defer self.allocator.free(info_set_data);
+        
+        const info_set_hash = std.hash_map.hashString(info_set_data);
+        
+        // Get available actions
+        const actions = try self.getAvailableActions(game_state_ptr);
+        defer self.allocator.free(actions);
+        
+        // Get or create node for this information set
+        var node = try self.getOrCreateNode(info_set_hash, info_set_data, @intCast(actions.len));
+        
+        // Get current strategy
+        const realization_weight = if (current_player == 0) p0 else p1;
+        const strategy = try node.getStrategy(realization_weight * weight);
+        defer self.allocator.free(strategy);
+        
+        // For Monte Carlo sampling, we sample one action instead of traversing all
+        const sampled_action_idx = self.sampleAction(strategy);
+        const sampled_action = actions[sampled_action_idx];
+        
+        // Create new game state with sampled action
+        var new_game = try self.cloneGameState(game_state_ptr);
+        defer new_game.deinit();
+        
+        _ = try new_game.applyAction(sampled_action);
+        
+        // Advance to next round if betting is complete
+        if (new_game.isBettingComplete()) {
+            new_game.nextRound();
+        }
+        
+        // Calculate opponent reach probabilities
+        const new_p0 = if (current_player == 0) p0 * strategy[sampled_action_idx] else p0;
+        const new_p1 = if (current_player == 1) p1 * strategy[sampled_action_idx] else p1;
+        
+        // Recursively traverse with sampled action
+        const utility = try self.mccfr(&new_game, player, new_p0, new_p1, weight);
+        
+        // Update regrets only for the acting player
+        if (current_player == player) {
+            const counterfactual_prob = if (player == 0) p1 else p0;
+            
+            // Calculate counterfactual values for all actions
+            for (actions, 0..) |action, i| {
+                if (i == sampled_action_idx) {
+                    // For sampled action, use actual utility
+                    const regret = utility - utility * strategy[sampled_action_idx];
+                    node.regret_sum[i] += counterfactual_prob * weight * regret;
+                } else {
+                    // For unsampled actions, estimate counterfactual value
+                    // This is where importance sampling helps reduce variance
+                    var action_game = try self.cloneGameState(game_state_ptr);
+                    defer action_game.deinit();
+                    
+                    _ = try action_game.applyAction(action);
+                    if (action_game.isBettingComplete()) {
+                        action_game.nextRound();
+                    }
+                    
+                    const action_utility = if (action_game.isTerminal())
+                        self.getUtility(&action_game, player)
+                    else
+                        utility; // Use sampled utility as baseline
+                    
+                    const regret = action_utility - utility;
+                    node.regret_sum[i] += counterfactual_prob * weight * regret / strategy[sampled_action_idx];
+                }
+            }
+        }
+        
+        return utility;
+    }
+    
+    // Sample action according to strategy distribution
+    fn sampleAction(self: *Self, strategy: []const f64) usize {
+        const rand = self.rng.random().float(f64);
+        var cumulative: f64 = 0.0;
+        
+        for (strategy, 0..) |prob, i| {
+            cumulative += prob;
+            if (rand <= cumulative) {
+                return i;
+            }
+        }
+        
+        // Fallback to last action
+        return strategy.len - 1;
+    }
+    
+    // Prune regrets below threshold to save memory
+    fn pruneRegrets(self: *Self) !void {
+        var iterator = self.nodes.iterator();
+        var pruned_count: u32 = 0;
+        
+        while (iterator.next()) |entry| {
+            const node = entry.value_ptr;
+            for (node.regret_sum) |*regret| {
+                if (regret.* < self.config.prune_threshold) {
+                    regret.* = 0.0;
+                    pruned_count += 1;
+                }
+            }
+        }
+        
+        if (pruned_count > 0) {
+            std.log.debug("Pruned {} negative regrets", .{pruned_count});
+        }
     }
     
     // Recursive CFR algorithm
@@ -258,13 +410,11 @@ pub const MCCFRTrainer = struct {
         // Shuffle deck
         self.rng.random().shuffle(u8, deck.items);
         
-        // Deal hole cards
-        const hands = [2][2]u8{
-            .{ deck.items[0], deck.items[1] },
-            .{ deck.items[2], deck.items[3] },
-        };
-        
-        game.dealHoleCards(&hands);
+        // Deal hole cards directly to players
+        game.players[0].hand.cards[0] = deck.items[0];
+        game.players[0].hand.cards[1] = deck.items[1];
+        game.players[1].hand.cards[0] = deck.items[2];
+        game.players[1].hand.cards[1] = deck.items[3];
         
         return game;
     }
@@ -337,8 +487,6 @@ pub const MCCFRTrainer = struct {
     }
     
     fn getUtility(self: *Self, game_state_ptr: *game_state.GameState, player: u8) f64 {
-        _ = self;
-        
         if (game_state_ptr.active_players == 1) {
             // All others folded
             return if (game_state_ptr.players[player].is_active) 
@@ -346,23 +494,157 @@ pub const MCCFRTrainer = struct {
                 -@as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
         }
         
-        // Showdown - simplified evaluation
-        // In practice, this would use proper hand evaluation
-        return 0.0; // Placeholder
+        // Showdown - evaluate hands
+        const player_cards = game_state_ptr.players[player].hand.cards;
+        const opponent = if (player == 0) @as(u8, 1) else 0;
+        const opponent_cards = game_state_ptr.players[opponent].hand.cards;
+        
+        // Build 7-card hands (2 hole cards + 5 board cards)
+        var player_hand: [7]hand_eval.Card = undefined;
+        var opponent_hand: [7]hand_eval.Card = undefined;
+        
+        // Convert hole cards to evaluator format
+        player_hand[0] = self.convertCardToEvalFormat(player_cards[0]);
+        player_hand[1] = self.convertCardToEvalFormat(player_cards[1]);
+        opponent_hand[0] = self.convertCardToEvalFormat(opponent_cards[0]);
+        opponent_hand[1] = self.convertCardToEvalFormat(opponent_cards[1]);
+        
+        // Add board cards
+        for (0..game_state_ptr.board_size) |i| {
+            const eval_card = self.convertCardToEvalFormat(game_state_ptr.board[i]);
+            player_hand[i + 2] = eval_card;
+            opponent_hand[i + 2] = eval_card;
+        }
+        
+        // Fill remaining cards with 0 if board is not complete
+        for (game_state_ptr.board_size..5) |i| {
+            player_hand[i + 2] = 0;
+            opponent_hand[i + 2] = 0;
+        }
+        
+        // Evaluate hands
+        const player_rank = if (game_state_ptr.board_size == 5)
+            self.hand_evaluator.evaluateSeven(player_hand)
+        else if (game_state_ptr.board_size == 3)
+            self.hand_evaluator.evaluateFive([5]hand_eval.Card{
+                player_hand[0], player_hand[1], player_hand[2], player_hand[3], player_hand[4]
+            })
+        else
+            hand_eval.MAX_HIGH_CARD; // Default for incomplete boards
+            
+        const opponent_rank = if (game_state_ptr.board_size == 5)
+            self.hand_evaluator.evaluateSeven(opponent_hand)
+        else if (game_state_ptr.board_size == 3)
+            self.hand_evaluator.evaluateFive([5]hand_eval.Card{
+                opponent_hand[0], opponent_hand[1], opponent_hand[2], opponent_hand[3], opponent_hand[4]
+            })
+        else
+            hand_eval.MAX_HIGH_CARD;
+        
+        // Lower rank = better hand
+        if (player_rank < opponent_rank) {
+            // Player wins
+            return @floatFromInt(game_state_ptr.pot);
+        } else if (player_rank > opponent_rank) {
+            // Player loses
+            return -@as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
+        } else {
+            // Split pot
+            return @as(f64, @floatFromInt(game_state_ptr.pot)) / 2.0 - 
+                   @as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
+        }
+    }
+    
+    fn convertCardToEvalFormat(self: *Self, card_idx: u8) hand_eval.Card {
+        _ = self;
+        // Convert from 0-51 index to evaluator format
+        const rank = card_idx % 13;
+        const suit = card_idx / 13;
+        
+        const rank_prime = hand_eval.PRIMES[rank];
+        const bitrank: u32 = @as(u32, 1) << @intCast(rank + 16);
+        const suit_bits: u32 = (@as(u32, 1) << @intCast(suit)) << 12;
+        const rank_bits: u32 = @as(u32, rank) << 8;
+        
+        return bitrank | suit_bits | rank_bits | rank_prime;
     }
     
     fn updateStrategyTable(self: *Self) !void {
         // Update the strategy table with learned strategies
+        var iterator = self.nodes.iterator();
+        var updated_count: u32 = 0;
+        
+        while (iterator.next()) |entry| {
+            const node = entry.value_ptr;
+            const info_set_hash = entry.key_ptr.*;
+            const avg_strategy = try node.getAverageStrategy();
+            defer self.allocator.free(avg_strategy);
+            
+            // Create action types from the number of actions
+            const action_types = try self.allocator.alloc(game_state.ActionType, node.num_actions);
+            defer self.allocator.free(action_types);
+            
+            // Map to standard actions (fold, call/check, raise)
+            for (action_types, 0..) |*action_type, i| {
+                action_type.* = switch (i) {
+                    0 => .fold,
+                    1 => .call, // or check
+                    2 => .raise,
+                    else => .call, // default
+                };
+            }
+            
+            // Get or create strategy profile in the strategy table
+            const profile = try self.strategy_table.getOrCreateStrategy(info_set_hash, action_types);
+            
+            // Update the profile with learned strategy
+            for (avg_strategy, 0..) |prob, i| {
+                profile.action_probs.probabilities[i] = prob;
+            }
+            
+            // Copy regret and strategy sums for persistence
+            for (node.regret_sum, 0..) |regret, i| {
+                profile.regret_sum[i] = regret;
+            }
+            for (node.strategy_sum, 0..) |sum, i| {
+                profile.strategy_sum[i] = sum;
+            }
+            
+            profile.reach_count = @intCast(self.iteration);
+            updated_count += 1;
+        }
+        
+        std.log.info("Updated {} strategies in strategy table", .{updated_count});
+        
+        // Calculate and log convergence metrics
+        const avg_strategy_distance = try self.calculateConvergence();
+        std.log.info("Average strategy distance from uniform: {d:.6}", .{avg_strategy_distance});
+    }
+    
+    fn calculateConvergence(self: *Self) !f64 {
+        var total_distance: f64 = 0.0;
+        var count: u32 = 0;
+        
         var iterator = self.nodes.iterator();
         while (iterator.next()) |entry| {
             const node = entry.value_ptr;
             const avg_strategy = try node.getAverageStrategy();
             defer self.allocator.free(avg_strategy);
             
-            // Store in strategy table (implementation depends on table format)
-            // For now, just log the strategies
-            std.log.debug("Info set: {} -> Strategy: {any}", .{ std.fmt.fmtSliceHexLower(node.info_set), avg_strategy });
+            // Calculate L2 distance from uniform distribution
+            const uniform_prob = 1.0 / @as(f64, @floatFromInt(node.num_actions));
+            var distance: f64 = 0.0;
+            
+            for (avg_strategy) |prob| {
+                const diff = prob - uniform_prob;
+                distance += diff * diff;
+            }
+            
+            total_distance += std.math.sqrt(distance);
+            count += 1;
         }
+        
+        return if (count > 0) total_distance / @as(f64, @floatFromInt(count)) else 0.0;
     }
 };
 

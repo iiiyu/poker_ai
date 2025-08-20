@@ -5,9 +5,16 @@ const std = @import("std");
 const poker_ai = @import("main.zig");
 const hand_eval = poker_ai.hand_eval;
 
+// Helper function to ensure output is always visible in all build modes
+fn print(comptime fmt: []const u8, args: anytype) void {
+    // Use std.debug.print which works in all build modes including ReleaseFast
+    std.debug.print(fmt ++ "\n", args);
+}
+
 pub fn main() !void {
-    std.log.info("Poker AI Demo Application", .{});
-    std.log.info("Version: {}.{}.{}", .{ 
+    // Use both std.log and print to ensure visibility
+    print("Poker AI Demo Application", .{});
+    print("Version: {}.{}.{}", .{ 
         poker_ai.version.major, 
         poker_ai.version.minor, 
         poker_ai.version.patch 
@@ -30,54 +37,62 @@ pub fn main() !void {
     // Demo CFR training (small example)
     try demoCFRTraining(allocator);
     
-    std.log.info("Demo completed successfully!", .{});
+    print("Demo completed successfully!", .{});
 }
 
 fn demoHandEvaluation(_: std.mem.Allocator) !void {
-    std.log.info("\n=== Hand Evaluation Demo ===", .{});
+    print("\n=== Hand Evaluation Demo ===", .{});
     
     var evaluator = poker_ai.hand_eval.HandEvaluator.init();
-    // No deinit needed for HandEvaluator
+    defer evaluator.lookup_tables.deinit();
     
     // Test hand: As Ks Qs Js Ts (royal flush)
-    // Cards need to be u32 for hand_eval
+    // Use the runtime CardOps.fromStringRuntime method
     const royal_flush = [5]hand_eval.Card{
-        @as(hand_eval.Card, (12 << 2) | 3), // Ace of spades
-        @as(hand_eval.Card, (11 << 2) | 3), // King of spades  
-        @as(hand_eval.Card, (10 << 2) | 3), // Queen of spades
-        @as(hand_eval.Card, (9 << 2) | 3),  // Jack of spades
-        @as(hand_eval.Card, (8 << 2) | 3),  // Ten of spades
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("As"), // Ace of spades
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("Ks"), // King of spades  
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("Qs"), // Queen of spades
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("Js"), // Jack of spades
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("Ts"), // Ten of spades
     };
     
     const result = evaluator.evaluateFive(royal_flush);
-    std.log.info("Royal flush evaluation: rank={}", .{result});
+    const hand_type = poker_ai.hand_eval.HandEvaluator.getHandType(result);
+    print("Royal flush evaluation: rank={}, type={s}", .{result, poker_ai.hand_eval.HandEvaluator.handTypeToString(hand_type)});
     
     // Test another hand: 2c 3d 7h 9s Kc (high card)
     const high_card = [5]hand_eval.Card{
-        @as(hand_eval.Card, (0 << 2) | 0),  // 2 of clubs
-        @as(hand_eval.Card, (1 << 2) | 1),  // 3 of diamonds
-        @as(hand_eval.Card, (5 << 2) | 2),  // 7 of hearts
-        @as(hand_eval.Card, (7 << 2) | 3),  // 9 of spades
-        @as(hand_eval.Card, (11 << 2) | 0), // K of clubs
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("2c"), // 2 of clubs
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("3d"), // 3 of diamonds
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("7h"), // 7 of hearts
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("9s"), // 9 of spades
+        try poker_ai.hand_eval.CardOps.fromStringRuntime("Kc"), // K of clubs
     };
     
     const result2 = evaluator.evaluateFive(high_card);
-    std.log.info("High card evaluation: rank={}", .{result2});
+    const hand_type2 = poker_ai.hand_eval.HandEvaluator.getHandType(result2);
+    print("High card evaluation: rank={}, type={s}", .{result2, poker_ai.hand_eval.HandEvaluator.handTypeToString(hand_type2)});
     
     // Compare hands
     if (result < result2) {  // Lower rank is stronger
-        std.log.info("Royal flush beats high card (as expected)", .{});
+        print("Royal flush beats high card (as expected)", .{});
+    } else {
+        print("WARNING: Hand evaluation is not working correctly!", .{});
     }
 }
 
 fn demoGameState(allocator: std.mem.Allocator) !void {
-    std.log.info("\n=== Game State Demo ===", .{});
+    print("\n=== Game State Demo ===", .{});
     
     // Create a 2-player game
     var game = try poker_ai.game_state.GameState.init(allocator, 2, 5, 10);
     defer game.deinit();
     
-    std.log.info("Created game: {} players, SB={d}, BB={d}", .{ game.num_players, game.small_blind, game.big_blind });
+    print("Created game: {} players, SB={d}, BB={d}", .{ game.num_players, game.small_blind, game.big_blind });
+    
+    // Post blinds to initialize betting
+    try game.postBlinds();
+    print("Posted blinds: SB={d}, BB={d}, pot={d}", .{ game.small_blind, game.big_blind, game.pot });
     
     // Deal hole cards
     var hands = [2][2]u8{
@@ -86,21 +101,23 @@ fn demoGameState(allocator: std.mem.Allocator) !void {
     };
     
     game.dealHoleCards(&hands);
-    std.log.info("Dealt hole cards to players", .{});
+    print("Dealt hole cards to players", .{});
+    print("Current player: {d}, current bet: {d}", .{ game.current_player, game.current_bet });
     
     // Player actions
     const call_action = poker_ai.game_state.Action.call();
+    const current_player_before = game.current_player;
     const success = try game.applyAction(call_action);
     
     if (success) {
-        std.log.info("Player {} called, pot is now {d}", .{ game.current_player, game.pot });
+        print("Player {d} called, pot is now {d}", .{ current_player_before, game.pot });
     }
     
-    std.log.info("Game is terminal: {}", .{game.isTerminal()});
+    print("Game is terminal: {}", .{game.isTerminal()});
 }
 
 fn demoCFRTraining(allocator: std.mem.Allocator) !void {
-    std.log.info("\n=== CFR Training Demo ===", .{});
+    print("\n=== CFR Training Demo ===", .{});
     
     // Create a small CFR training configuration
     const config = poker_ai.cfr.CFRConfig{
@@ -111,44 +128,44 @@ fn demoCFRTraining(allocator: std.mem.Allocator) !void {
         .discount_beta = 0.0,
     };
     
-    std.log.info("CFR Config: {} iterations, exploration={d:.2}", .{ config.iterations, config.exploration_probability });
+    print("CFR Config: {} iterations, exploration={d:.2}", .{ config.iterations, config.exploration_probability });
     
     // Create required components
     var strategy_table = poker_ai.strategy_table.StrategyTable.init(allocator);
     defer strategy_table.deinit();
     
-    // AbstractionTable not yet implemented in lookup_tables.zig
-    // var abstraction_table = try poker_ai.lookup_tables.AbstractionTable.init(allocator);
-    // defer abstraction_table.deinit();
+    // AbstractionTable now implemented
+    var abstraction_table = try poker_ai.lookup_tables.AbstractionTable.init(allocator);
+    defer abstraction_table.deinit();
     
-    // var hand_evaluator = poker_ai.hand_eval.HandEvaluator.init();
-    // HandEvaluator has no deinit - commented out since trainer is not created
+    var hand_evaluator = poker_ai.hand_eval.HandEvaluator.init();
+    defer hand_evaluator.lookup_tables.deinit();
     
-    // Create CFR trainer - commented out since AbstractionTable is not implemented
-    // var trainer = try poker_ai.cfr.MCCFRTrainer.init(
-    //     allocator,
-    //     config,
-    //     &strategy_table,
-    //     &abstraction_table,
-    //     &hand_evaluator,
-    // );
-    // defer trainer.deinit();
+    // Create CFR trainer
+    var trainer = try poker_ai.cfr.MCCFRTrainer.init(
+        allocator,
+        config,
+        &strategy_table,
+        &abstraction_table,
+        &hand_evaluator,
+    );
+    defer trainer.deinit();
     
-    std.log.info("Created MCCFR trainer, starting training...", .{});
+    print("Created MCCFR trainer, starting training...", .{});
     
-    // Run training - commented out since trainer not created
-    // try trainer.train();
+    // Run training
+    try trainer.train();
     
-    std.log.info("CFR training completed!", .{});
+    print("CFR training completed!", .{});
     
     // Show strategy table size
     const memory_usage = strategy_table.getMemoryUsage();
-    std.log.info("Strategy table memory usage: {d} bytes", .{memory_usage});
+    print("Strategy table memory usage: {d} bytes", .{memory_usage});
 }
 
 // Error handling for demo
 fn handleError(err: anyerror) void {
-    std.log.err("Demo error: {}", .{err});
+    print("Demo error: {}", .{err});
 }
 
 test "demo compilation" {

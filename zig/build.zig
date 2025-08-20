@@ -60,6 +60,70 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the demo application");
     run_step.dependOn(&run_cmd.step);
 
+    // Clustering demo executable
+    const clustering_demo = b.addExecutable(.{
+        .name = "clustering_demo",
+        .root_source_file = b.path("examples/clustering_demo.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    
+    clustering_demo.root_module.addImport("poker_ai", lib.root_module);
+    clustering_demo.linkLibC();
+    clustering_demo.linkSystemLibrary("sqlite3");
+    
+    b.installArtifact(clustering_demo);
+    
+    const run_clustering = b.addRunArtifact(clustering_demo);
+    run_clustering.step.dependOn(b.getInstallStep());
+    
+    const clustering_step = b.step("clustering", "Run the clustering demo");
+    clustering_step.dependOn(&run_clustering.step);
+
+    // Tournament demo executable
+    const tournament_demo = b.addExecutable(.{
+        .name = "tournament_demo",
+        .root_source_file = b.path("examples/tournament_demo.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    
+    tournament_demo.root_module.addImport("poker_ai", lib.root_module);
+    tournament_demo.linkLibC();
+    tournament_demo.linkSystemLibrary("sqlite3");
+    
+    b.installArtifact(tournament_demo);
+    
+    const run_tournament = b.addRunArtifact(tournament_demo);
+    run_tournament.step.dependOn(b.getInstallStep());
+    
+    const tournament_step = b.step("tournament", "Run the tournament demo");
+    tournament_step.dependOn(&run_tournament.step);
+
+    // Interactive poker game executable
+    const play_poker = b.addExecutable(.{
+        .name = "play_poker",
+        .root_source_file = b.path("examples/play_poker.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    
+    play_poker.root_module.addImport("poker_ai", lib.root_module);
+    play_poker.linkLibC();
+    play_poker.linkSystemLibrary("sqlite3");
+    
+    b.installArtifact(play_poker);
+    
+    const run_play_poker = b.addRunArtifact(play_poker);
+    run_play_poker.step.dependOn(b.getInstallStep());
+    
+    if (b.args) |args| {
+        run_play_poker.addArgs(args);
+    }
+    
+    const play_step = b.step("play", "Run the interactive poker game");
+    play_step.dependOn(&run_play_poker.step);
+
     // Unit tests
     const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),
@@ -81,6 +145,8 @@ pub fn build(b: *std.Build) void {
         "tests/test_cfr.zig",
         "tests/test_ffi.zig",
         "tests/test_game_engine_integration.zig",
+        "tests/test_mccfr_complete.zig",
+        "tests/test_tournament.zig",
     };
     
     for (test_files) |test_file| {

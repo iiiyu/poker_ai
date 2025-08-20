@@ -53,7 +53,7 @@ pub const InputEvent = union(enum) {
     menu_action: MenuAction,
     raw_key: u8,
     timeout,
-    error: anyerror,
+    input_error: anyerror,
 };
 
 /// Terminal configuration for input handling
@@ -62,35 +62,16 @@ const TerminalConfig = struct {
     original_settings: if (builtin.os.tag == .windows) void else std.os.linux.termios,
     
     fn enableRawMode(self: *TerminalConfig) !void {
-        if (builtin.os.tag == .windows) {
-            // Windows terminal configuration would go here
-            // For now, we'll use a simplified approach
-            return;
-        } else {
-            // Unix-like systems
-            const stdin_fd = std.os.linux.STDIN_FILENO;
-            self.original_settings = try std.os.linux.tcgetattr(stdin_fd);
-            
-            var raw_settings = self.original_settings;
-            
-            // Disable canonical mode and echo
-            raw_settings.lflag &= ~(std.os.linux.ICANON | std.os.linux.ECHO | std.os.linux.ISIG);
-            // Set minimum characters to 0 for non-blocking read
-            raw_settings.cc[std.os.linux.VMIN] = 0;
-            // Set timeout to 1/10 second
-            raw_settings.cc[std.os.linux.VTIME] = 1;
-            
-            try std.os.linux.tcsetattr(stdin_fd, std.os.linux.TCSA.NOW, raw_settings);
-        }
+        _ = self; // Unused for now
+        // TODO: Implement terminal raw mode configuration
+        // For now, we'll use regular terminal input
+        return;
     }
     
     fn restoreMode(self: *TerminalConfig) !void {
-        if (builtin.os.tag == .windows) {
-            return;
-        } else {
-            const stdin_fd = std.os.linux.STDIN_FILENO;
-            try std.os.linux.tcsetattr(stdin_fd, std.os.linux.TCSA.NOW, self.original_settings);
-        }
+        _ = self; // Unused for now
+        // TODO: Implement terminal mode restoration
+        return;
     }
 };
 
@@ -138,7 +119,7 @@ pub const InputHandler = struct {
             return null;
         } else {
             var buffer: [1]u8 = undefined;
-            const bytes_read = std.os.read(std.os.linux.STDIN_FILENO, &buffer) catch |err| switch (err) {
+            const bytes_read = std.posix.read(std.posix.STDIN_FILENO, &buffer) catch |err| switch (err) {
                 error.WouldBlock => return null,
                 else => return err,
             };
@@ -168,7 +149,8 @@ pub const InputHandler = struct {
     }
     
     /// Parse player action from character input
-    pub fn parsePlayerAction(char: u8) ActionType {
+    pub fn parsePlayerAction(self: *InputHandler, char: u8) ActionType {
+        _ = self;
         return switch (char) {
             'f', 'F' => .fold,
             'c', 'C' => .call,
@@ -182,22 +164,122 @@ pub const InputHandler = struct {
     }
     
     /// Parse menu action from character input
-    pub fn parseMenuAction(char: u8) MenuAction {
+    pub fn parseMenuAction(self: *InputHandler, char: u8) MenuAction {
+        _ = self;
         return switch (char) {
-            'w', 'W', 65 => .up,    // W or Up arrow (65 after ESC sequence)
-            's', 'S', 66 => .down,  // S or Down arrow (66 after ESC sequence)
+            'w', 'W' => .up,    // W key
+            's', 'S' => .down,  // S key
             '\r', '\n', ' ' => .select, // Enter or Space
-            'b', 'B', 27 => .back,  // B or ESC
+            'b' => .back,  // B key
+            27 => .back,   // ESC key
+            65 => .up,     // Up arrow
+            'B' => .back,  // B uppercase (ASCII 66)
             'q', 'Q' => .quit,
             else => .invalid,
         };
+    }
+    
+    /// Get key input and convert to InputEvent
+    pub fn getKeyInput(self: *InputHandler) !InputEvent {
+        if (try self.readChar()) |char| {
+            // Handle arrow key sequences
+            if (char == 27) { // ESC sequence start
+                if (try self.readChar()) |second| {
+                    if (second == 91) { // '[' for arrow keys
+                        if (try self.readChar()) |third| {
+                            return InputEvent{ .menu_action = switch (third) {
+                                65 => .up,    // Up arrow
+                                66 => .down,  // Down arrow
+                                67 => .select, // Right arrow (treat as select)
+                                68 => .back,  // Left arrow (treat as back)
+                                else => .invalid,
+                            }};
+                        }
+                    }
+                }
+                return InputEvent{ .menu_action = .back }; // Plain ESC
+            }
+            
+            const menu_action = self.parseMenuAction(char);
+            if (menu_action != .invalid) {
+                return InputEvent{ .menu_action = menu_action };
+            }
+            
+            const player_action = self.parsePlayerAction(char);
+            if (player_action != .invalid) {
+                return InputEvent{ .player_action = .{ .action = player_action, .amount = null } };
+            }
+            
+            return InputEvent{ .raw_key = char };
+        }
+        
+        return InputEvent{ .timeout = {} };
+    }
+    
+    /// Get raise amount input with +/- controls
+    pub fn getRaiseAmountInput(
+        self: *InputHandler,
+        current_amount: u32,
+        min_amount: u32,
+        max_amount: u32
+    ) !InputEvent {
+        if (try self.readChar()) |char| {
+            switch (char) {
+                '+', '=' => {
+                    const increment = @max(10, (max_amount - min_amount) / 20);
+                    const new_amount = @min(max_amount, current_amount + increment);
+                    return InputEvent{ .player_action = .{ .action = .raise, .amount = new_amount } };
+                },
+                '-', '_' => {
+                    const decrement = @max(10, (max_amount - min_amount) / 20);
+                    const new_amount = @max(min_amount, current_amount - decrement);
+                    return InputEvent{ .player_action = .{ .action = .raise, .amount = new_amount } };
+                },
+                '\r', '\n' => {
+                    return InputEvent{ .menu_action = .select };
+                },
+                '\x08', '\x7f' => { // Backspace or DEL
+                    return InputEvent{ .menu_action = .back };
+                },
+                'q', 'Q', 27 => {
+                    return InputEvent{ .menu_action = .quit };
+                },
+                else => {}
+            }
+            
+            return InputEvent{ .raw_key = char };
+        }
+        
+        return InputEvent{ .timeout = {} };
+    }
+    
+    /// Check for quit input without blocking
+    pub fn checkForQuit(self: *InputHandler) !bool {
+        if (try self.readChar()) |char| {
+            return char == 'q' or char == 'Q' or char == 27; // q, Q, or ESC
+        }
+        return false;
+    }
+    
+    /// Wait for any key press with optional message
+    pub fn waitForAnyKey(self: *InputHandler, message: ?[]const u8) !void {
+        if (message) |msg| {
+            std.debug.print("{s}", .{msg});
+        }
+        
+        while (true) {
+            if (try self.readChar()) |_| {
+                break;
+            }
+            std.time.sleep(50 * std.time.ns_per_ms); // 50ms delay
+        }
     }
     
     /// Get player action with menu display
     pub fn getPlayerAction(
         self: *InputHandler,
         available_actions: []const ActionType,
-        current_bet: u32,
+        _: u32, // current_bet unused
         call_amount: u32,
         min_raise: u32,
         max_raise: u32,
@@ -233,7 +315,7 @@ pub const InputHandler = struct {
             return InputEvent{ .timeout = {} };
         }
         
-        const action = parsePlayerAction(char.?);
+        const action = self.parsePlayerAction(char.?);
         
         // Validate action is available
         var is_valid = false;
@@ -329,7 +411,7 @@ pub const InputHandler = struct {
             return InputEvent{ .timeout = {} };
         }
         
-        const menu_action = parseMenuAction(char.?);
+        const menu_action = self.parseMenuAction(char.?);
         
         switch (menu_action) {
             .up => {
@@ -365,24 +447,6 @@ pub const InputHandler = struct {
         return InputEvent{ .menu_action = menu_action };
     }
     
-    /// Wait for any key press
-    pub fn waitForAnyKey(self: *InputHandler, prompt: ?[]const u8) !void {
-        if (prompt) |p| {
-            std.debug.print("{s}", .{p});
-        } else {
-            std.debug.print("Press any key to continue...");
-        }
-        
-        while (true) {
-            if (try self.readChar()) |_| {
-                break;
-            }
-            std.time.sleep(10 * std.time.ns_per_ms);
-        }
-        
-        std.debug.print("\n");
-    }
-    
     /// Get yes/no confirmation
     pub fn getConfirmation(self: *InputHandler, prompt: []const u8) !bool {
         std.debug.print("{s} (y/n): ", .{prompt});
@@ -403,14 +467,6 @@ pub const InputHandler = struct {
             }
             std.time.sleep(10 * std.time.ns_per_ms);
         }
-    }
-    
-    /// Check if quit was requested
-    pub fn checkForQuit(self: *InputHandler) !bool {
-        if (try self.readChar()) |char| {
-            return char == 'q' or char == 'Q' or char == 27; // ESC
-        }
-        return false;
     }
 };
 
@@ -449,22 +505,28 @@ pub fn getAvailableActions(
 test "action parsing" {
     const testing = std.testing;
     
-    try testing.expectEqual(ActionType.fold, parsePlayerAction('f'));
-    try testing.expectEqual(ActionType.call, parsePlayerAction('c'));
-    try testing.expectEqual(ActionType.raise, parsePlayerAction('r'));
-    try testing.expectEqual(ActionType.quit, parsePlayerAction('q'));
-    try testing.expectEqual(ActionType.invalid, parsePlayerAction('x'));
+    var handler = InputHandler.init(testing.allocator);
+    defer handler.deinit();
+    
+    try testing.expectEqual(ActionType.fold, handler.parsePlayerAction('f'));
+    try testing.expectEqual(ActionType.call, handler.parsePlayerAction('c'));
+    try testing.expectEqual(ActionType.raise, handler.parsePlayerAction('r'));
+    try testing.expectEqual(ActionType.quit, handler.parsePlayerAction('q'));
+    try testing.expectEqual(ActionType.invalid, handler.parsePlayerAction('x'));
 }
 
 test "menu action parsing" {
     const testing = std.testing;
     
-    try testing.expectEqual(MenuAction.up, parseMenuAction('w'));
-    try testing.expectEqual(MenuAction.down, parseMenuAction('s'));
-    try testing.expectEqual(MenuAction.select, parseMenuAction('\n'));
-    try testing.expectEqual(MenuAction.back, parseMenuAction('b'));
-    try testing.expectEqual(MenuAction.quit, parseMenuAction('q'));
-    try testing.expectEqual(MenuAction.invalid, parseMenuAction('x'));
+    var handler = InputHandler.init(testing.allocator);
+    defer handler.deinit();
+    
+    try testing.expectEqual(MenuAction.up, handler.parseMenuAction('w'));
+    try testing.expectEqual(MenuAction.down, handler.parseMenuAction('s'));
+    try testing.expectEqual(MenuAction.select, handler.parseMenuAction('\n'));
+    try testing.expectEqual(MenuAction.back, handler.parseMenuAction('b'));
+    try testing.expectEqual(MenuAction.quit, handler.parseMenuAction('q'));
+    try testing.expectEqual(MenuAction.invalid, handler.parseMenuAction('x'));
 }
 
 test "action availability" {

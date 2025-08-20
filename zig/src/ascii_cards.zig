@@ -113,7 +113,6 @@ pub fn renderCompact(card: Card, allocator: std.mem.Allocator) ![]u8 {
 pub fn renderNormal(card: Card, allocator: std.mem.Allocator) ![]u8 {
     const rs = cardToRankSuit(card);
     const rank_char = getRankChar(rs.rank);
-    const suit_symbol = getSuitSymbol(rs.suit);
     const color = getSuitColor(rs.suit);
     
     var result = std.ArrayList(u8).init(allocator);
@@ -217,7 +216,7 @@ pub fn renderMultipleCards(cards: []const Card, mode: DisplayMode, allocator: st
                 var lines = std.ArrayList([]const u8).init(allocator);
                 defer lines.deinit();
                 
-                var line_iter = std.mem.split(u8, render, "\n");
+                var line_iter = std.mem.splitScalar(u8, render, '\n');
                 while (line_iter.next()) |line| {
                     try lines.append(line);
                 }

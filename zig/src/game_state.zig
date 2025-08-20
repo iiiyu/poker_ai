@@ -192,6 +192,28 @@ pub const GameState = struct {
         self.action_sequence.deinit();
     }
     
+    // Post blinds to start the betting round
+    pub fn postBlinds(self: *Self) !void {
+        // Small blind position (left of dealer)
+        const sb_pos = (self.dealer_button + 1) % self.num_players;
+        // Big blind position (left of small blind)
+        const bb_pos = (self.dealer_button + 2) % self.num_players;
+        
+        // Post small blind
+        var sb_player = &self.players[sb_pos];
+        if (!sb_player.bet(self.small_blind)) return error.InsufficientStack;
+        self.pot += self.small_blind;
+        
+        // Post big blind
+        var bb_player = &self.players[bb_pos];
+        if (!bb_player.bet(self.big_blind)) return error.InsufficientStack;
+        self.pot += self.big_blind;
+        self.current_bet = self.big_blind;
+        
+        // Set current player to left of big blind
+        self.current_player = (bb_pos + 1) % self.num_players;
+    }
+    
     // Deal hole cards to players
     pub fn dealHoleCards(self: *Self, hands: [][2]Card) void {
         for (hands, 0..) |hand, i| {
@@ -204,7 +226,7 @@ pub const GameState = struct {
     // Deal board cards for current round
     pub fn dealBoard(self: *Self, cards: []const Card) void {
         const board_start = self.round.boardSize();
-        const new_cards = switch (self.round) {
+        const new_cards: u8 = switch (self.round) {
             .preflop => 0,
             .flop => 3,
             .turn => 1,
@@ -215,7 +237,7 @@ pub const GameState = struct {
             self.board[board_start + i] = card;
         }
         
-        self.board_size = self.round.boardSize() + @as(u8, @intCast(new_cards));
+        self.board_size = self.round.boardSize() + new_cards;
     }
     
     // Apply player action
@@ -379,4 +401,42 @@ test "game state initialization" {
     try testing.expectEqual(Round.preflop, state.round);
     try testing.expectEqual(@as(u32, 5), state.small_blind);
     try testing.expectEqual(@as(u32, 10), state.big_blind);
+    try testing.expectEqual(@as(u32, 0), state.pot); // Pot should start at 0
+}
+
+test "pot calculation with blinds and actions" {
+    const testing = std.testing;
+    
+    var state = try GameState.init(testing.allocator, 2, 5, 10);
+    defer state.deinit();
+    
+    // Post blinds
+    try state.postBlinds();
+    try testing.expectEqual(@as(u32, 15), state.pot); // SB + BB = 5 + 10 = 15
+    try testing.expectEqual(@as(u32, 10), state.current_bet); // BB sets current bet
+    
+    // Player calls
+    const call_action = Action.call();
+    const success = try state.applyAction(call_action);
+    try testing.expect(success);
+    try testing.expectEqual(@as(u32, 20), state.pot); // 15 + 5 (call amount) = 20
+}
+
+test "pot calculation with raises" {
+    const testing = std.testing;
+    
+    var state = try GameState.init(testing.allocator, 2, 5, 10);
+    defer state.deinit();
+    
+    // Post blinds
+    try state.postBlinds();
+    try testing.expectEqual(@as(u32, 15), state.pot); // SB + BB = 5 + 10 = 15
+    try testing.expectEqual(@as(u32, 10), state.current_bet); // BB sets current bet
+    
+    // Player raises to 20
+    const raise_action = Action.raise(10); // Raise by 10 (total bet becomes 20)
+    const success = try state.applyAction(raise_action);
+    try testing.expect(success);
+    try testing.expectEqual(@as(u32, 30), state.pot); // 15 + 15 (raise amount) = 30
+    try testing.expectEqual(@as(u32, 20), state.current_bet); // New current bet is 20
 }

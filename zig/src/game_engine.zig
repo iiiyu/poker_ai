@@ -251,7 +251,7 @@ pub const TexasHoldemGameEngine = struct {
     /// Start a new hand (reset for next hand)
     pub fn newHand(self: *Self) !void {
         // Reset players for new hand
-        for (&self.players[0..self.num_players]) |*p| {
+        for (self.players[0..self.num_players]) |*p| {
             p.newHand();
         }
 
@@ -289,7 +289,7 @@ pub const TexasHoldemGameEngine = struct {
         
         // Initialize betting round
         try self.betting_manager.startRound(
-            &self.players[0..self.num_players], 
+            self.players[0..self.num_players], 
             self.current_player_index,
             self.config.big_blind
         );
@@ -331,13 +331,32 @@ pub const TexasHoldemGameEngine = struct {
 
     /// Apply a player action and advance game state
     pub fn applyAction(self: *Self, action: Action) !void {
+        // Convert Action to ActionForValidation
+        const validation_action = action_validator.ActionForValidation{
+            .action_type = @enumFromInt(@intFromEnum(action.action_type)),
+            .amount = action.amount,
+            .player_id = action.player_id,
+        };
+        
+        // Convert GameConfig for validation
+        const validator_config = action_validator.GameConfig{
+            .small_blind = self.config.small_blind,
+            .big_blind = self.config.big_blind,
+            .ante = self.config.ante,
+            .initial_stack = self.config.initial_stack,
+            .max_raises_per_round = self.config.max_raises_per_round,
+            .is_limit = false,
+            .min_bet_multiplier = 2.0,
+            .is_tournament = false,
+        };
+        
         // Validate action
         const validation_result = self.action_validator.validateAction(
-            action,
+            validation_action,
             &self.players[action.player_id],
-            &self.players[0..self.num_players],
+            self.players[0..self.num_players],
             &self.betting_manager,
-            self.config
+            validator_config
         );
 
         if (!validation_result.is_valid) {
@@ -382,8 +401,12 @@ pub const TexasHoldemGameEngine = struct {
         // Record action in history
         try self.action_history.append(action);
 
-        // Update betting manager
-        self.betting_manager.recordAction(action);
+        // Update betting manager  
+        self.betting_manager.recordAction(.{
+            .action_type = @intFromEnum(action.action_type),
+            .player_id = action.player_id,
+            .amount = action.amount,
+        });
 
         // Check if betting round is complete
         if (self.isBettingRoundComplete()) {
@@ -400,12 +423,36 @@ pub const TexasHoldemGameEngine = struct {
     /// Get legal actions for current player
     pub fn getLegalActions(self: Self) ![]ActionType {
         const current_player = &self.players[self.current_player_index];
-        return self.action_validator.getLegalActions(
+        
+        // Convert GameConfig to ActionValidator's GameConfig
+        const validator_config = action_validator.GameConfig{
+            .small_blind = self.config.small_blind,
+            .big_blind = self.config.big_blind,
+            .ante = self.config.ante,
+            .initial_stack = self.config.initial_stack,
+            .max_raises_per_round = self.config.max_raises_per_round,
+            .is_limit = false, // Assume No-limit for now
+            .min_bet_multiplier = 2.0,
+            .is_tournament = false,
+        };
+        
+        const validator_actions = try self.action_validator.getLegalActions(
             current_player,
-            &self.players[0..self.num_players],
+            self.players[0..self.num_players],
             &self.betting_manager,
-            self.config
+            validator_config
         );
+        
+        // Convert ActionValidator.ActionType to game_engine.ActionType
+        const converted_actions = try self.allocator.alloc(ActionType, validator_actions.len);
+        for (validator_actions, 0..) |validator_action, i| {
+            converted_actions[i] = @enumFromInt(@intFromEnum(validator_action));
+        }
+        
+        // We must defer the deallocation of validator_actions
+        defer self.allocator.free(validator_actions);
+        
+        return converted_actions;
     }
 
     /// Get information set string for given player (for MCCFR)
@@ -481,7 +528,7 @@ pub const TexasHoldemGameEngine = struct {
     }
 
     fn isBettingRoundComplete(self: Self) bool {
-        return self.betting_manager.isRoundComplete(&self.players[0..self.num_players]);
+        return self.betting_manager.isRoundComplete(self.players[0..self.num_players]);
     }
 
     fn advanceToNextStage(self: *Self) !void {
@@ -489,14 +536,14 @@ pub const TexasHoldemGameEngine = struct {
             self.betting_stage = next_stage;
             
             // Reset betting for new round
-            for (&self.players[0..self.num_players]) |*p| {
+            for (self.players[0..self.num_players]) |*p| {
                 p.resetBetting();
             }
 
             // Start new betting round
             self.current_player_index = self.nextActivePlayer(self.dealer_button);
             try self.betting_manager.startRound(
-                &self.players[0..self.num_players], 
+                self.players[0..self.num_players], 
                 self.current_player_index, 
                 0 // No forced bet except blinds
             );

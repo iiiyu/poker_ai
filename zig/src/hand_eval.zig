@@ -50,36 +50,34 @@ pub const HandType = enum(u8) {
 pub const CardOps = struct {
     /// Create a card from string representation (e.g., "As", "2h", "Kd", "Tc")
     pub fn fromString(comptime str: []const u8) Card {
-        comptime {
-            if (str.len != 2) @compileError("Card string must be exactly 2 characters");
-            
-            const rank_char = str[0];
-            const suit_char = str[1];
-            
-            // Convert rank character to rank integer
-            const rank_int = blk: {
-                for (STR_RANKS, 0..) |r, i| {
-                    if (r == rank_char) break :blk @as(u32, @intCast(i));
-                }
-                @compileError("Invalid rank character: " ++ [1]u8{rank_char});
-            };
-            
-            // Convert suit character to suit integer
-            const suit_int = switch (suit_char) {
-                's' => SUIT_SPADES,
-                'h' => SUIT_HEARTS,
-                'd' => SUIT_DIAMONDS,
-                'c' => SUIT_CLUBS,
-                else => @compileError("Invalid suit character: " ++ [1]u8{suit_char}),
-            };
-            
-            const rank_prime = PRIMES[rank_int];
-            const bitrank: u32 = @as(u32, 1) << @intCast(rank_int + 16);
-            const suit = suit_int << 12;
-            const rank = rank_int << 8;
-            
-            return bitrank | suit | rank | rank_prime;
-        }
+        if (str.len != 2) @compileError("Card string must be exactly 2 characters");
+        
+        const rank_char = str[0];
+        const suit_char = str[1];
+        
+        // Convert rank character to rank integer
+        const rank_int = comptime blk: {
+            for (STR_RANKS, 0..) |r, i| {
+                if (r == rank_char) break :blk @as(u32, @intCast(i));
+            }
+            @compileError("Invalid rank character: " ++ [1]u8{rank_char});
+        };
+        
+        // Convert suit character to suit integer
+        const suit_int = comptime switch (suit_char) {
+            's' => SUIT_SPADES,
+            'h' => SUIT_HEARTS,
+            'd' => SUIT_DIAMONDS,
+            'c' => SUIT_CLUBS,
+            else => @compileError("Invalid suit character: " ++ [1]u8{suit_char}),
+        };
+        
+        const rank_prime = PRIMES[rank_int];
+        const bitrank: u32 = @as(u32, 1) << @intCast(rank_int + 16);
+        const suit = suit_int << 12;
+        const rank = rank_int << 8;
+        
+        return bitrank | suit | rank | rank_prime;
     }
     
     /// Create a card from string representation at runtime
@@ -151,6 +149,23 @@ pub const CardOps = struct {
         }
         return product;
     }
+    
+    /// Create a card from rank and suit
+    pub fn new(rank: u32, suit: u32) Card {
+        const rank_prime = PRIMES[rank];
+        const bitrank: u32 = @as(u32, 1) << @intCast(rank + 16);
+        const suit_shifted = suit << 12;
+        const rank_shifted = rank << 8;
+        
+        return bitrank | suit_shifted | rank_shifted | rank_prime;
+    }
+    
+    /// Create a card from index (0-51)
+    pub fn fromIndex(index: u32) Card {
+        const rank = index % 13;
+        const suit = index / 13;
+        return new(rank, @as(u32, 1) << @intCast(suit));
+    }
 };
 
 /// High-performance hand evaluator
@@ -158,8 +173,15 @@ pub const HandEvaluator = struct {
     lookup_tables: LookupTables.Tables,
     
     pub fn init() HandEvaluator {
+        var tables = LookupTables.Tables.init();
+        // Initialize the tables with actual data
+        tables.initTables() catch {
+            // If initialization fails, return with empty tables
+            // This will cause all lookups to return MAX_HIGH_CARD
+            std.debug.print("WARNING: Failed to initialize lookup tables\n", .{});
+        };
         return HandEvaluator{
-            .lookup_tables = LookupTables.Tables.init(),
+            .lookup_tables = tables,
         };
     }
     
@@ -263,6 +285,63 @@ pub const HandEvaluator = struct {
             .pair => "Pair",
             .high_card => "High Card",
         };
+    }
+    
+    /// Evaluate a hand with hole cards and board
+    /// Used by clustering module for feature extraction
+    pub fn evaluate(self: *const HandEvaluator, hole_cards: [2]Card, board: []const Card) HandRank {
+        const total_cards = 2 + board.len;
+        
+        if (total_cards == 5) {
+            // Exactly 5 cards - direct evaluation
+            var cards: [5]Card = undefined;
+            cards[0] = hole_cards[0];
+            cards[1] = hole_cards[1];
+            @memcpy(cards[2..], board);
+            return self.evaluateFive(cards);
+        } else if (total_cards == 6) {
+            // 6 cards - check all combinations
+            var cards: [6]Card = undefined;
+            cards[0] = hole_cards[0];
+            cards[1] = hole_cards[1];
+            @memcpy(cards[2..], board);
+            return self.evaluateSix(cards);
+        } else if (total_cards == 7) {
+            // 7 cards - check all combinations
+            var cards: [7]Card = undefined;
+            cards[0] = hole_cards[0];
+            cards[1] = hole_cards[1];
+            @memcpy(cards[2..], board);
+            return self.evaluateSeven(cards);
+        } else if (total_cards == 2) {
+            // Preflop - return high card rank based on hole cards
+            // This is a simplified evaluation for preflop
+            const rank1 = CardOps.getRank(hole_cards[0]);
+            const rank2 = CardOps.getRank(hole_cards[1]);
+            const high_rank = @max(rank1, rank2);
+            const low_rank = @min(rank1, rank2);
+            
+            // Simple preflop strength estimate
+            if (rank1 == rank2) {
+                // Pair - stronger than any high card
+                const pair_strength = if (high_rank >= 12) 0 else @as(u16, @intCast(12 - high_rank)) * 10;
+                return if (pair_strength > MAX_PAIR) MAX_PAIR else MAX_PAIR - pair_strength;
+            } else {
+                // High card - based on both cards
+                const high_val = @as(u32, high_rank) * 100;
+                const low_val = @as(u32, low_rank) * 10;
+                const total_val = high_val + low_val;
+                
+                if (total_val >= MAX_HIGH_CARD) {
+                    return MAX_HIGH_CARD;
+                } else {
+                    return MAX_HIGH_CARD - @as(HandRank, @intCast(total_val));
+                }
+            }
+        } else {
+            // Invalid number of cards
+            return MAX_HIGH_CARD;
+        }
     }
 };
 

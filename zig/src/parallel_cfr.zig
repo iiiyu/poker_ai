@@ -352,13 +352,11 @@ fn createRandomGameLocal(allocator: std.mem.Allocator, rng: *std.Random.DefaultP
     
     rng.random().shuffle(u8, deck.items);
     
-    // Deal hole cards
-    var hands = [2][2]u8{
-        .{ deck.items[0], deck.items[1] },
-        .{ deck.items[2], deck.items[3] },
-    };
-    
-    game.dealHoleCards(&hands);
+    // Deal hole cards directly to players
+    game.players[0].hand.cards[0] = deck.items[0];
+    game.players[0].hand.cards[1] = deck.items[1];
+    game.players[1].hand.cards[0] = deck.items[2];
+    game.players[1].hand.cards[1] = deck.items[3];
     
     return game;
 }
@@ -426,8 +424,82 @@ fn getUtilityLocal(game_state_ptr: *game_state.GameState, player: u8) f64 {
             -@as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
     }
     
-    // Simplified showdown evaluation
-    return 0.0;
+    // Showdown - evaluate hands using proper hand evaluator
+    const player_cards = game_state_ptr.players[player].hand.cards;
+    const opponent = if (player == 0) @as(u8, 1) else 0;
+    const opponent_cards = game_state_ptr.players[opponent].hand.cards;
+    
+    // Build 7-card hands (2 hole cards + 5 board cards)
+    var player_hand: [7]hand_eval.Card = undefined;
+    var opponent_hand: [7]hand_eval.Card = undefined;
+    
+    // Convert hole cards to evaluator format
+    player_hand[0] = convertCardToEvalFormatLocal(player_cards[0]);
+    player_hand[1] = convertCardToEvalFormatLocal(player_cards[1]);
+    opponent_hand[0] = convertCardToEvalFormatLocal(opponent_cards[0]);
+    opponent_hand[1] = convertCardToEvalFormatLocal(opponent_cards[1]);
+    
+    // Add board cards
+    for (0..game_state_ptr.board_size) |i| {
+        const eval_card = convertCardToEvalFormatLocal(game_state_ptr.board[i]);
+        player_hand[i + 2] = eval_card;
+        opponent_hand[i + 2] = eval_card;
+    }
+    
+    // Fill remaining cards with dummy cards if board is not complete
+    const dummy_card = convertCardToEvalFormatLocal(51); // Use last card as dummy
+    for (game_state_ptr.board_size..5) |i| {
+        player_hand[i + 2] = dummy_card;
+        opponent_hand[i + 2] = dummy_card;
+    }
+    
+    // Create local evaluator for thread safety
+    var evaluator = hand_eval.HandEvaluator.init();
+    
+    // Evaluate hands based on board size
+    const player_rank = if (game_state_ptr.board_size == 5)
+        evaluator.evaluateSeven(player_hand)
+    else if (game_state_ptr.board_size >= 3)
+        evaluator.evaluateFive([5]hand_eval.Card{
+            player_hand[0], player_hand[1], player_hand[2], player_hand[3], player_hand[4]
+        })
+    else
+        hand_eval.MAX_HIGH_CARD; // Pre-flop, use default
+        
+    const opponent_rank = if (game_state_ptr.board_size == 5)
+        evaluator.evaluateSeven(opponent_hand)
+    else if (game_state_ptr.board_size >= 3)
+        evaluator.evaluateFive([5]hand_eval.Card{
+            opponent_hand[0], opponent_hand[1], opponent_hand[2], opponent_hand[3], opponent_hand[4]
+        })
+    else
+        hand_eval.MAX_HIGH_CARD;
+    
+    // Lower rank = better hand
+    if (player_rank < opponent_rank) {
+        // Player wins
+        return @floatFromInt(game_state_ptr.pot);
+    } else if (player_rank > opponent_rank) {
+        // Player loses
+        return -@as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
+    } else {
+        // Split pot
+        return @as(f64, @floatFromInt(game_state_ptr.pot)) / 2.0 - 
+               @as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
+    }
+}
+
+fn convertCardToEvalFormatLocal(card_idx: u8) hand_eval.Card {
+    // Convert from 0-51 index to evaluator format
+    const rank = card_idx % 13;
+    const suit = card_idx / 13;
+    
+    const rank_prime = hand_eval.PRIMES[rank];
+    const bitrank: u32 = @as(u32, 1) << @intCast(rank + 16);
+    const suit_bits: u32 = (@as(u32, 1) << @intCast(suit)) << 12;
+    const rank_bits: u32 = @as(u32, rank) << 8;
+    
+    return bitrank | suit_bits | rank_bits | rank_prime;
 }
 
 // Add missing imports at the top

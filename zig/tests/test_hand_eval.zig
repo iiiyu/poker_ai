@@ -1,7 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
-const hand_eval = @import("hand_eval");
-const lookup_tables = @import("lookup_tables");
+const poker_ai = @import("poker_ai");
+const hand_eval = poker_ai.hand_eval;
+const lookup_tables = poker_ai.lookup_tables;
 
 // Import types for easier access
 const Card = hand_eval.Card;

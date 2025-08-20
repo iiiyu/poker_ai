@@ -5,9 +5,15 @@ const std = @import("std");
 const poker_ai = @import("poker_ai");
 const hand_eval = poker_ai.hand_eval;
 
+// Helper function to ensure output is always visible in all build modes
+fn print(comptime fmt: []const u8, args: anytype) void {
+    // Use std.debug.print which works in all build modes including ReleaseFast
+    std.debug.print(fmt ++ "\n", args);
+}
+
 pub fn main() !void {
-    std.log.info("Poker AI Performance Benchmarks", .{});
-    std.log.info("================================", .{});
+    print("Poker AI Performance Benchmarks", .{});
+    print("================================", .{});
     
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -24,11 +30,11 @@ pub fn main() !void {
     try benchmarkUtilities(allocator);
     try benchmarkCFRComponents(allocator);
     
-    std.log.info("All benchmarks completed!", .{});
+    print("All benchmarks completed!", .{});
 }
 
 fn benchmarkHandEvaluation(_: std.mem.Allocator) !void {
-    std.log.info("\n=== Hand Evaluation Benchmarks ===", .{});
+    print("\n=== Hand Evaluation Benchmarks ===", .{});
     
     var evaluator = poker_ai.hand_eval.HandEvaluator.init();
     // No deinit needed for HandEvaluator
@@ -54,7 +60,7 @@ fn benchmarkHandEvaluation(_: std.mem.Allocator) !void {
     const ns_per_eval_5 = @divTrunc(end_5 - start_5, iterations_5);
     const evals_per_sec_5 = @divTrunc(1_000_000_000, ns_per_eval_5);
     
-    std.log.info("5-card evaluation: {}ns per eval, {} evals/sec", .{ ns_per_eval_5, evals_per_sec_5 });
+    print("5-card evaluation: {}ns per eval, {} evals/sec", .{ ns_per_eval_5, evals_per_sec_5 });
     
     // Benchmark 7-card evaluation
     const iterations_7 = 100_000;
@@ -79,17 +85,17 @@ fn benchmarkHandEvaluation(_: std.mem.Allocator) !void {
     const ns_per_eval_7 = @divTrunc(end_7 - start_7, iterations_7);
     const evals_per_sec_7 = @divTrunc(1_000_000_000, ns_per_eval_7);
     
-    std.log.info("7-card evaluation: {}ns per eval, {} evals/sec", .{ ns_per_eval_7, evals_per_sec_7 });
+    print("7-card evaluation: {}ns per eval, {} evals/sec", .{ ns_per_eval_7, evals_per_sec_7 });
     
     // Memory usage
     // HandEvaluator has lookup_tables field which contains the tables
     // For now we'll estimate the size
     const estimated_table_size = 50000 * @sizeOf(u32); // Rough estimate
-    std.log.info("Estimated lookup table memory usage: {} bytes ({} KB)", .{ estimated_table_size, estimated_table_size / 1024 });
+    print("Estimated lookup table memory usage: {} bytes ({} KB)", .{ estimated_table_size, estimated_table_size / 1024 });
 }
 
 fn benchmarkGameStateOperations(allocator: std.mem.Allocator) !void {
-    std.log.info("\n=== Game State Benchmarks ===", .{});
+    print("\n=== Game State Benchmarks ===", .{});
     
     // Benchmark game state creation/destruction
     const iterations = 100_000;
@@ -102,7 +108,7 @@ fn benchmarkGameStateOperations(allocator: std.mem.Allocator) !void {
     const end = std.time.nanoTimestamp();
     
     const ns_per_create = @divTrunc(end - start, iterations);
-    std.log.info("Game state create/destroy: {}ns per operation", .{ns_per_create});
+    print("Game state create/destroy: {}ns per operation", .{ns_per_create});
     
     // Benchmark action application
     var game = try poker_ai.game_state.GameState.init(allocator, 2, 5, 10);
@@ -123,7 +129,7 @@ fn benchmarkGameStateOperations(allocator: std.mem.Allocator) !void {
     const action_end = std.time.nanoTimestamp();
     
     const ns_per_action = @divTrunc(action_end - action_start, action_iterations);
-    std.log.info("Action application: {}ns per operation", .{ns_per_action});
+    print("Action application: {}ns per operation", .{ns_per_action});
     
     // Benchmark information set generation
     game.players[0].hand = poker_ai.game_state.Hand.init(0, 1);
@@ -137,11 +143,11 @@ fn benchmarkGameStateOperations(allocator: std.mem.Allocator) !void {
     const info_end = std.time.nanoTimestamp();
     
     const ns_per_info = @divTrunc(info_end - info_start, info_iterations);
-    std.log.info("Info set generation: {}ns per operation", .{ns_per_info});
+    print("Info set generation: {}ns per operation", .{ns_per_info});
 }
 
 fn benchmarkMemoryOperations(allocator: std.mem.Allocator) !void {
-    std.log.info("\n=== Memory Management Benchmarks ===", .{});
+    print("\n=== Memory Management Benchmarks ===", .{});
     
     // Benchmark strategy table operations
     var strategy_table = poker_ai.strategy_table.StrategyTable.init(allocator);
@@ -159,14 +165,14 @@ fn benchmarkMemoryOperations(allocator: std.mem.Allocator) !void {
     const ns_per_strategy = @divTrunc(end - start, iterations);
     const memory_usage = strategy_table.getMemoryUsage();
     
-    std.log.info("Strategy creation: {}ns per operation", .{ns_per_strategy});
-    std.log.info("Strategy table memory: {} bytes ({} KB)", .{ memory_usage, memory_usage / 1024 });
+    print("Strategy creation: {}ns per operation", .{ns_per_strategy});
+    print("Strategy table memory: {} bytes ({} KB)", .{ memory_usage, memory_usage / 1024 });
     
     // AbstractionTable not yet implemented - skip this benchmark
 }
 
 fn benchmarkUtilities(allocator: std.mem.Allocator) !void {
-    std.log.info("\n=== Utility Function Benchmarks ===", .{});
+    print("\n=== Utility Function Benchmarks ===", .{});
     
     // Benchmark hash functions
     const hash_iterations = 1_000_000;
@@ -179,7 +185,7 @@ fn benchmarkUtilities(allocator: std.mem.Allocator) !void {
     const hash_end = std.time.nanoTimestamp();
     
     const ns_per_hash = @divTrunc(hash_end - hash_start, hash_iterations);
-    std.log.info("Card hashing: {}ns per operation", .{ns_per_hash});
+    print("Card hashing: {}ns per operation", .{ns_per_hash});
     
     // Benchmark random number generation
     var rng = poker_ai.utils.RandomUtils.FastRng.init(12345);
@@ -192,7 +198,7 @@ fn benchmarkUtilities(allocator: std.mem.Allocator) !void {
     const rng_end = std.time.nanoTimestamp();
     
     const ns_per_rng = @divTrunc(rng_end - rng_start, rng_iterations);
-    std.log.info("Random number generation: {}ns per operation", .{ns_per_rng});
+    print("Random number generation: {}ns per operation", .{ns_per_rng});
     
     // Benchmark bit operations
     const bit_iterations = 100_000_000;
@@ -205,7 +211,7 @@ fn benchmarkUtilities(allocator: std.mem.Allocator) !void {
     const bit_end = std.time.nanoTimestamp();
     
     const ns_per_bit = @divTrunc(bit_end - bit_start, bit_iterations);
-    std.log.info("Bit manipulation: {}ns per operation", .{ns_per_bit});
+    print("Bit manipulation: {}ns per operation", .{ns_per_bit});
     
     // Benchmark string operations
     const string_iterations = 100_000;
@@ -217,11 +223,11 @@ fn benchmarkUtilities(allocator: std.mem.Allocator) !void {
     const string_end = std.time.nanoTimestamp();
     
     const ns_per_string = @divTrunc(string_end - string_start, string_iterations);
-    std.log.info("Card string conversion: {}ns per operation", .{ns_per_string});
+    print("Card string conversion: {}ns per operation", .{ns_per_string});
 }
 
 fn benchmarkCFRComponents(allocator: std.mem.Allocator) !void {
-    std.log.info("\n=== CFR Component Benchmarks ===", .{});
+    print("\n=== CFR Component Benchmarks ===", .{});
     
     // Benchmark info set node operations
     const iterations = 100_000;
@@ -241,7 +247,7 @@ fn benchmarkCFRComponents(allocator: std.mem.Allocator) !void {
     const strategy_end = std.time.nanoTimestamp();
     
     const ns_per_strategy = @divTrunc(strategy_end - strategy_start, iterations);
-    std.log.info("Strategy calculation: {}ns per operation", .{ns_per_strategy});
+    print("Strategy calculation: {}ns per operation", .{ns_per_strategy});
     
     // Benchmark action probability operations
     const actions = [_]poker_ai.game_state.ActionType{ .fold, .call, .raise };
@@ -259,7 +265,7 @@ fn benchmarkCFRComponents(allocator: std.mem.Allocator) !void {
     const prob_end = std.time.nanoTimestamp();
     
     const ns_per_prob = @divTrunc(prob_end - prob_start, prob_iterations);
-    std.log.info("Action sampling: {}ns per operation", .{ns_per_prob});
+    print("Action sampling: {}ns per operation", .{ns_per_prob});
     
     // Benchmark game state cloning for CFR
     var original_game = try poker_ai.game_state.GameState.init(allocator, 2, 5, 10);
@@ -274,7 +280,7 @@ fn benchmarkCFRComponents(allocator: std.mem.Allocator) !void {
     const clone_end = std.time.nanoTimestamp();
     
     const ns_per_clone = @divTrunc(clone_end - clone_start, clone_iterations);
-    std.log.info("Game state cloning: {}ns per operation", .{ns_per_clone});
+    print("Game state cloning: {}ns per operation", .{ns_per_clone});
 }
 
 // Helper function for benchmarking game state cloning
@@ -303,7 +309,7 @@ fn cloneGameStateForBench(original: *poker_ai.game_state.GameState, allocator: s
 
 // Performance stress test
 fn stressTest(allocator: std.mem.Allocator) !void {
-    std.log.info("\n=== Stress Test ===", .{});
+    print("\n=== Stress Test ===", .{});
     
     const stress_iterations = 1000;
     var total_memory: usize = 0;
@@ -350,7 +356,7 @@ fn stressTest(allocator: std.mem.Allocator) !void {
     const elapsed = timer.elapsedMs();
     const avg_memory = total_memory / stress_iterations;
     
-    std.log.info("Stress test completed: {} iterations in {d:.2}ms", .{ stress_iterations, elapsed });
-    std.log.info("Average memory per iteration: {} bytes", .{avg_memory});
-    std.log.info("Operations per second: {d:.0}", .{ @as(f64, @floatFromInt(stress_iterations)) / (elapsed / 1000.0) });
+    print("Stress test completed: {} iterations in {d:.2}ms", .{ stress_iterations, elapsed });
+    print("Average memory per iteration: {} bytes", .{avg_memory});
+    print("Operations per second: {d:.0}", .{ @as(f64, @floatFromInt(stress_iterations)) / (elapsed / 1000.0) });
 }

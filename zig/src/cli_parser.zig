@@ -339,9 +339,8 @@ pub const CliParser = struct {
     
     /// Parse player configuration string (format: "type:name:stack")
     fn parsePlayerConfig(self: CliParser, config_str: []const u8, config: *Config) !void {
-        _ = self; // Remove unused variable warning
         
-        var parts = std.mem.split(u8, config_str, ":");
+        var parts = std.mem.splitScalar(u8, config_str, ':');
         
         const type_str = parts.next() orelse return error.InvalidPlayerConfig;
         const name_str = parts.next() orelse return error.InvalidPlayerConfig;

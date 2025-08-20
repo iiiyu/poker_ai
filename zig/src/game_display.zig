@@ -133,28 +133,28 @@ pub const GameDisplay = struct {
         // Top and bottom borders
         for (0..width) |x| {
             self.moveCursor(0, @intCast(x));
-            std.debug.print("═");
+            std.debug.print("{s}", .{"═"});
             self.moveCursor(height - 1, @intCast(x));
-            std.debug.print("═");
+            std.debug.print("{s}", .{"═"});
         }
         
         // Left and right borders
         for (0..height) |y| {
             self.moveCursor(@intCast(y), 0);
-            std.debug.print("║");
+            std.debug.print("{s}", .{"║"});
             self.moveCursor(@intCast(y), width - 1);
-            std.debug.print("║");
+            std.debug.print("{s}", .{"║"});
         }
         
         // Corners
         self.moveCursor(0, 0);
-        std.debug.print("╔");
+        std.debug.print("{s}", .{"╔"});
         self.moveCursor(0, width - 1);
-        std.debug.print("╗");
+        std.debug.print("{s}", .{"╗"});
         self.moveCursor(height - 1, 0);
-        std.debug.print("╚");
+        std.debug.print("{s}", .{"╚"});
         self.moveCursor(height - 1, width - 1);
-        std.debug.print("╝");
+        std.debug.print("{s}", .{"╝"});
     }
     
     /// Draw poker table ellipse
@@ -178,7 +178,7 @@ pub const GameDisplay = struct {
                     if (self.use_color) {
                         std.debug.print("{s}●{s}", .{ Colors.DIM, Colors.RESET });
                     } else {
-                        std.debug.print("●");
+                        std.debug.print("{s}", .{"●"});
                     }
                 }
             }
@@ -187,7 +187,7 @@ pub const GameDisplay = struct {
     
     /// Draw community cards
     fn drawCommunityCards(self: *GameDisplay, cards: []const Card, stage: BettingStage) !void {
-        const num_cards = switch (stage) {
+        const num_cards: u8 = switch (stage) {
             .pre_flop => 0,
             .flop => 3,
             .turn => 4,
@@ -208,7 +208,7 @@ pub const GameDisplay = struct {
                 if (self.use_color) std.debug.print("{s}Community:{s} ", .{ Colors.BOLD, Colors.RESET });
                 
                 for (cards_to_show, 0..) |card, i| {
-                    if (i > 0) std.debug.print(" ");
+                    if (i > 0) std.debug.print("{c}", .{' '});
                     const card_str = try ascii_cards.renderCompact(card, self.allocator);
                     defer self.allocator.free(card_str);
                     std.debug.print("{s}", .{card_str});
@@ -219,7 +219,7 @@ pub const GameDisplay = struct {
                 const cards_str = try ascii_cards.renderMultipleCards(cards_to_show, .normal, self.allocator);
                 defer self.allocator.free(cards_str);
                 
-                var lines = std.mem.split(u8, cards_str, "\n");
+                var lines = std.mem.splitScalar(u8, cards_str, '\n');
                 var line_index: u16 = 0;
                 
                 while (lines.next()) |line| {
@@ -233,7 +233,7 @@ pub const GameDisplay = struct {
                 const cards_str = try ascii_cards.renderMultipleCards(cards_to_show, .detailed, self.allocator);
                 defer self.allocator.free(cards_str);
                 
-                var lines = std.mem.split(u8, cards_str, "\n");
+                var lines = std.mem.splitScalar(u8, cards_str, '\n');
                 var line_index: u16 = 0;
                 
                 while (lines.next()) |line| {
@@ -370,7 +370,7 @@ pub const GameDisplay = struct {
             if (self.use_color) {
                 std.debug.print("{s}[?] [?]{s}", .{ Colors.DIM, Colors.RESET });
             } else {
-                std.debug.print("[?] [?]");
+                std.debug.print("{s}", .{"[?] [?]"});
             }
         }
     }
@@ -406,7 +406,7 @@ pub const GameDisplay = struct {
         if (self.use_color) {
             std.debug.print("{s}RECENT ACTIONS:{s}", .{ Colors.BOLD, Colors.RESET });
         } else {
-            std.debug.print("RECENT ACTIONS:");
+            std.debug.print("{s}", .{"RECENT ACTIONS:"});
         }
         y += 1;
         
@@ -497,7 +497,7 @@ pub const GameDisplay = struct {
         if (self.use_color) {
             std.debug.print("{s}HAND RESULT{s}", .{ Colors.BOLD, Colors.RESET });
         } else {
-            std.debug.print("HAND RESULT");
+            std.debug.print("{s}", .{"HAND RESULT"});
         }
         y += 3;
         
@@ -506,9 +506,9 @@ pub const GameDisplay = struct {
         if (winner_indices.len == 1) {
             std.debug.print("Winner: Player {d}", .{winner_indices[0] + 1});
         } else {
-            std.debug.print("Split pot between players: ");
+            std.debug.print("{s}", .{"Split pot between players: "});
             for (winner_indices, 0..) |idx, i| {
-                if (i > 0) std.debug.print(", ");
+                if (i > 0) std.debug.print("{s}", .{", "});
                 std.debug.print("{d}", .{idx + 1});
             }
         }
@@ -565,7 +565,7 @@ pub const GameDisplay = struct {
         
         y += 2;
         self.moveCursor(y, center_x - 15);
-        std.debug.print("Press any key to continue...");
+        std.debug.print("{s}", .{"Press any key to continue..."});
     }
 };
 

@@ -11,6 +11,7 @@ pub const cfr = @import("cfr.zig");
 pub const strategy_table = @import("strategy_table.zig");
 pub const parallel_cfr = @import("parallel_cfr.zig");
 pub const utils = @import("utils.zig");
+pub const clustering = @import("clustering.zig");
 
 // MCCFR modules
 pub const mccfr = @import("mccfr.zig");
@@ -25,6 +26,17 @@ pub const player = @import("player.zig");
 pub const pot = @import("pot.zig");
 pub const betting = @import("betting.zig");
 pub const action_validator = @import("action_validator.zig");
+
+// Tournament system modules
+pub const tournament = @import("tournament.zig");
+pub const tournament_parallel = @import("tournament_parallel.zig");
+
+// Terminal UI modules
+pub const terminal_ui = @import("terminal_ui.zig");
+pub const cli_parser = @import("cli_parser.zig");
+pub const ascii_cards = @import("ascii_cards.zig");
+pub const game_display = @import("game_display.zig");
+pub const input_handler = @import("input_handler.zig");
 
 // C API for Python FFI
 pub const c_api = @import("c_api.zig");
