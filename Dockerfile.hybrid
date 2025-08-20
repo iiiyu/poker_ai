@@ -1,0 +1,106 @@
+# Multi-stage Dockerfile for Python + Zig hybrid container
+# Optimized for production deployment with both components
+
+# Zig build stage
+FROM alpine:3.19 AS zig-builder
+
+# Install Zig build dependencies
+RUN apk add --no-cache \
+    wget \
+    xz \
+    sqlite-dev \
+    musl-dev \
+    gcc \
+    && rm -rf /var/cache/apk/*
+
+# Install Zig compiler
+ARG ZIG_VERSION=0.13.0
+RUN wget -q https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz \
+    && tar -xf zig-linux-x86_64-${ZIG_VERSION}.tar.xz \
+    && mv zig-linux-x86_64-${ZIG_VERSION} /usr/local/zig \
+    && ln -s /usr/local/zig/zig /usr/local/bin/zig \
+    && rm zig-linux-x86_64-${ZIG_VERSION}.tar.xz
+
+WORKDIR /build
+COPY poker_ai/zig_clustering/ ./
+RUN zig build -Doptimize=ReleaseFast --prefix-exe-dir /build/bin
+
+# Python dependencies stage
+FROM python:3.12-slim AS python-deps
+
+# Install system dependencies for Python packages
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt pyproject.toml ./
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Runtime stage - combine both components
+FROM python:3.12-slim AS runtime
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y \
+    libsqlite3-0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user
+RUN groupadd -g 1000 poker && \
+    useradd -r -u 1000 -g poker -d /app -s /bin/bash poker
+
+# Copy Python dependencies from deps stage
+COPY --from=python-deps /root/.local /home/poker/.local
+ENV PATH="/home/poker/.local/bin:$PATH"
+
+# Copy Zig binary from build stage
+COPY --from=zig-builder /build/bin/poker_clustering /usr/local/bin/
+RUN chmod +x /usr/local/bin/poker_clustering
+
+# Create application directory
+WORKDIR /app
+RUN chown poker:poker /app
+
+# Copy Python application code
+COPY --chown=poker:poker poker_ai/ ./poker_ai/
+COPY --chown=poker:poker setup.py ./
+COPY --chown=poker:poker pyproject.toml ./
+COPY --chown=poker:poker README.md HISTORY.md LICENSE ./
+
+# Install the poker_ai package
+USER root
+RUN pip install -e .
+USER poker
+
+# Create data and model directories
+RUN mkdir -p /app/data /app/models /app/logs
+VOLUME ["/app/data", "/app/models", "/app/logs"]
+
+# Environment variables
+ENV PYTHONPATH="/app:$PYTHONPATH"
+ENV POKER_AI_DATA_DIR="/app/data"
+ENV POKER_AI_MODEL_DIR="/app/models"
+ENV POKER_AI_LOG_DIR="/app/logs"
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import poker_ai; print('OK')" && poker_clustering --help || exit 1
+
+# Expose default ports
+EXPOSE 5000 8080
+
+# Default command runs the CLI
+CMD ["python", "-m", "poker_ai.cli.runner", "--help"]
+
+# Resource limits recommendations
+# docker run --memory=500m --cpus=1.0 poker_ai:hybrid
+
+# Labels
+LABEL org.opencontainers.image.title="Poker AI Hybrid"
+LABEL org.opencontainers.image.description="Complete poker AI system with Python interface and Zig clustering"
+LABEL org.opencontainers.image.vendor="Poker AI"
+LABEL org.opencontainers.image.licenses="GPL-3.0"
+LABEL org.opencontainers.image.source="https://github.com/fedden/poker_ai"

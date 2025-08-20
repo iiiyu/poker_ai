@@ -1,0 +1,249 @@
+[
+  {
+    "cards": [
+      "As",
+      "Ks",
+      "Qs",
+      "Js",
+      "Ts"
+    ],
+    "python_rank": 1,
+    "python_type": "Straight Flush",
+    "description": "Royal flush in spades",
+    "expected_type": "Straight Flush"
+  },
+  {
+    "cards": [
+      "9s",
+      "8s",
+      "7s",
+      "6s",
+      "5s"
+    ],
+    "python_rank": 6,
+    "python_type": "Straight Flush",
+    "description": "Nine-high straight flush",
+    "expected_type": "Straight Flush"
+  },
+  {
+    "cards": [
+      "5s",
+      "4s",
+      "3s",
+      "2s",
+      "As"
+    ],
+    "python_rank": 10,
+    "python_type": "Straight Flush",
+    "description": "Wheel straight flush (5-high)",
+    "expected_type": "Straight Flush"
+  },
+  {
+    "cards": [
+      "As",
+      "Ah",
+      "Ad",
+      "Ac",
+      "Ks"
+    ],
+    "python_rank": 11,
+    "python_type": "Four of a Kind",
+    "description": "Four aces with king kicker",
+    "expected_type": "Four of a Kind"
+  },
+  {
+    "cards": [
+      "2s",
+      "2h",
+      "2d",
+      "2c",
+      "3s"
+    ],
+    "python_rank": 166,
+    "python_type": "Four of a Kind",
+    "description": "Four deuces with three kicker",
+    "expected_type": "Four of a Kind"
+  },
+  {
+    "cards": [
+      "As",
+      "Ah",
+      "Ad",
+      "Ks",
+      "Kh"
+    ],
+    "python_rank": 167,
+    "python_type": "Full House",
+    "description": "Aces full of kings",
+    "expected_type": "Full House"
+  },
+  {
+    "cards": [
+      "2s",
+      "2h",
+      "2d",
+      "3s",
+      "3h"
+    ],
+    "python_rank": 322,
+    "python_type": "Full House",
+    "description": "Deuces full of threes",
+    "expected_type": "Full House"
+  },
+  {
+    "cards": [
+      "As",
+      "Js",
+      "9s",
+      "7s",
+      "2s"
+    ],
+    "python_rank": 645,
+    "python_type": "Flush",
+    "description": "Ace-high flush in spades",
+    "expected_type": "Flush"
+  },
+  {
+    "cards": [
+      "2h",
+      "4h",
+      "6h",
+      "8h",
+      "Th"
+    ],
+    "python_rank": 1527,
+    "python_type": "Flush",
+    "description": "Ten-high flush in hearts",
+    "expected_type": "Flush"
+  },
+  {
+    "cards": [
+      "As",
+      "Kh",
+      "Qd",
+      "Jc",
+      "Ts"
+    ],
+    "python_rank": 1600,
+    "python_type": "Straight",
+    "description": "Broadway straight (mixed suits)",
+    "expected_type": "Straight"
+  },
+  {
+    "cards": [
+      "5h",
+      "4d",
+      "3c",
+      "2s",
+      "Ah"
+    ],
+    "python_rank": 1609,
+    "python_type": "Straight",
+    "description": "Wheel straight (mixed suits)",
+    "expected_type": "Straight"
+  },
+  {
+    "cards": [
+      "As",
+      "Ah",
+      "Ad",
+      "Ks",
+      "Qs"
+    ],
+    "python_rank": 1610,
+    "python_type": "Three of a Kind",
+    "description": "Trip aces with K-Q kickers",
+    "expected_type": "Three of a Kind"
+  },
+  {
+    "cards": [
+      "2s",
+      "2h",
+      "2d",
+      "3s",
+      "4h"
+    ],
+    "python_rank": 2467,
+    "python_type": "Three of a Kind",
+    "description": "Trip deuces with 4-3 kickers",
+    "expected_type": "Three of a Kind"
+  },
+  {
+    "cards": [
+      "As",
+      "Ah",
+      "Ks",
+      "Kh",
+      "Qs"
+    ],
+    "python_rank": 2468,
+    "python_type": "Two Pair",
+    "description": "Aces and kings with queen kicker",
+    "expected_type": "Two Pair"
+  },
+  {
+    "cards": [
+      "2s",
+      "2h",
+      "3s",
+      "3h",
+      "4d"
+    ],
+    "python_rank": 3325,
+    "python_type": "Two Pair",
+    "description": "Deuces and threes with four kicker",
+    "expected_type": "Two Pair"
+  },
+  {
+    "cards": [
+      "As",
+      "Ah",
+      "Ks",
+      "Qd",
+      "Js"
+    ],
+    "python_rank": 3326,
+    "python_type": "Pair",
+    "description": "Pair of aces with K-Q-J kickers",
+    "expected_type": "Pair"
+  },
+  {
+    "cards": [
+      "2s",
+      "2h",
+      "3d",
+      "4c",
+      "5s"
+    ],
+    "python_rank": 6185,
+    "python_type": "Pair",
+    "description": "Pair of deuces with 5-4-3 kickers",
+    "expected_type": "Pair"
+  },
+  {
+    "cards": [
+      "As",
+      "Kh",
+      "Qd",
+      "Jc",
+      "9s"
+    ],
+    "python_rank": 6186,
+    "python_type": "High Card",
+    "description": "Ace-high (A-K-Q-J-9)",
+    "expected_type": "High Card"
+  },
+  {
+    "cards": [
+      "7s",
+      "5h",
+      "4d",
+      "3c",
+      "2s"
+    ],
+    "python_rank": 7462,
+    "python_type": "High Card",
+    "description": "Seven-high (7-5-4-3-2)",
+    "expected_type": "High Card"
+  }
+]

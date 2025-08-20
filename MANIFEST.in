@@ -1,0 +1,67 @@
+# MANIFEST.in for poker_ai package
+# Specifies additional files to include in source distribution
+
+# Documentation
+include README.md
+include HISTORY.md
+include LICENSE
+include CONTRIBUTING.md
+include ARCHITECTURE.md
+
+# Configuration files
+include pyproject.toml
+include requirements.txt
+include clustering_configs.yaml
+
+# Build and deployment files
+include Dockerfile.zig
+include Dockerfile.hybrid
+include docker-compose.prod.yml
+recursive-include scripts *.sh
+
+# Zig source code and build files
+recursive-include poker_ai/zig_clustering *.zig
+recursive-include poker_ai/zig_clustering *.md
+include poker_ai/zig_clustering/build.zig
+
+# Test files
+recursive-include test *.py
+
+# Example and application files
+recursive-include examples *.py
+recursive-include applications *.py
+
+# Data files
+include poker_ai/data/*.json
+include poker_ai/clustering/*.yaml
+
+# Shell scripts
+include *.sh
+
+# Exclude build artifacts and temporary files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude .git*
+global-exclude *.egg-info
+
+# Exclude Zig build artifacts
+global-exclude zig-out
+global-exclude zig-cache
+global-exclude *.o
+global-exclude main
+
+# Exclude data and model files
+global-exclude *.db
+global-exclude *.db-shm
+global-exclude *.db-wal
+global-exclude *.joblib
+global-exclude *.pkl
+
+# Exclude logs and temporary files
+global-exclude *.log
+global-exclude .coverage
+global-exclude htmlcov

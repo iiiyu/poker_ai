@@ -1,0 +1,317 @@
+version: '3.8'
+
+# Production Docker Compose configuration for Poker AI
+# Optimized for performance, security, and monitoring
+
+services:
+  # Main Poker AI application with Python + Zig hybrid
+  poker-ai:
+    image: pokerai/poker-ai:latest
+    container_name: poker-ai-app
+    restart: unless-stopped
+    
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2.0'
+        reservations:
+          memory: 512M
+          cpus: '1.0'
+    
+    # Environment configuration
+    environment:
+      - PYTHONPATH=/app
+      - POKER_AI_DATA_DIR=/app/data
+      - POKER_AI_MODEL_DIR=/app/models
+      - POKER_AI_LOG_DIR=/app/logs
+      - POKER_AI_LOG_LEVEL=INFO
+      - POKER_AI_WORKERS=4
+      - FLASK_ENV=production
+    
+    # Volume mounts for persistent data
+    volumes:
+      - poker_data:/app/data
+      - poker_models:/app/models
+      - poker_logs:/app/logs
+      - ./clustering_configs.yaml:/app/clustering_configs.yaml:ro
+    
+    # Network configuration
+    ports:
+      - "8080:5000"  # Main application port
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import poker_ai; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Security
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,noexec,nosuid,nodev
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    depends_on:
+      - redis
+      - prometheus
+
+  # Zig clustering service (microservice architecture)
+  poker-clustering:
+    image: pokerai/poker-clustering:latest
+    container_name: poker-clustering
+    restart: unless-stopped
+    
+    # Resource limits (clustering is CPU intensive)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '4.0'
+        reservations:
+          memory: 1G
+          cpus: '2.0'
+    
+    # Volume for clustering data
+    volumes:
+      - clustering_data:/data
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "poker_clustering", "--help"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    
+    # Security
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=50M,noexec,nosuid,nodev
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: poker-redis
+    restart: unless-stopped
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    
+    # Configuration
+    command: >
+      redis-server 
+      --maxmemory 200mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+    
+    # Persistent storage
+    volumes:
+      - redis_data:/data
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    
+    # Security
+    user: "999:999"
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: poker-prometheus
+    restart: unless-stopped
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+    
+    # Configuration
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    
+    ports:
+      - "9090:9090"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: poker-grafana
+    restart: unless-stopped
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    
+    # Environment
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    
+    volumes:
+      - grafana_data:/var/lib/grafana
+    
+    ports:
+      - "3000:3000"
+    
+    depends_on:
+      - prometheus
+
+  # Nginx reverse proxy and load balancer
+  nginx:
+    image: nginx:alpine
+    container_name: poker-nginx
+    restart: unless-stopped
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+    
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - nginx_logs:/var/log/nginx
+    
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    
+    depends_on:
+      - poker-ai
+
+# Named volumes for persistent data
+volumes:
+  poker_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/poker
+  
+  poker_models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/models
+  
+  poker_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs
+  
+  clustering_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/clustering
+  
+  redis_data:
+    driver: local
+  
+  prometheus_data:
+    driver: local
+  
+  grafana_data:
+    driver: local
+  
+  nginx_logs:
+    driver: local
+
+# Networks
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Production deployment commands:
+# 
+# 1. Create required directories:
+#    mkdir -p data/{poker,models,clustering} logs monitoring
+# 
+# 2. Set proper permissions:
+#    sudo chown -R 1000:1000 data logs
+# 
+# 3. Create monitoring config:
+#    cp monitoring/prometheus.yml.example monitoring/prometheus.yml
+#    cp nginx.conf nginx.prod.conf
+# 
+# 4. Deploy:
+#    docker-compose -f docker-compose.prod.yml up -d
+# 
+# 5. Scale services:
+#    docker-compose -f docker-compose.prod.yml up -d --scale poker-ai=3
+# 
+# 6. Monitor:
+#    docker-compose -f docker-compose.prod.yml logs -f
+#    curl http://localhost:3000  # Grafana dashboard
+#    curl http://localhost:9090  # Prometheus metrics

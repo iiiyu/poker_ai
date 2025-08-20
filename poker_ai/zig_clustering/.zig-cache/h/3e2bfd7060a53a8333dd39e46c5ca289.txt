@@ -1,0 +1,14 @@
+0
+21 260731453 1755636597162571179 200faa55603445de467f078c62462c21 2 o/26d9d16c44cac3525e7eb85c46f7366b/cimport.h
+533694 237952978 1745045617000000000 3e7f1e726419b0d6b7dec649b3cde883 0 /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk/usr/include/sqlite3.h
+2497 260707048 1755629988045108453 b2fdb090a7260fd9bb1ee13109f6f95f 1 include/stdarg.h
+417 260706989 1755629988024780762 c8f062fa64e6bd8bfcbd2e1bc393ce2a 1 include/__stdarg_header_macro.h
+467 260706986 1755629988023753027 0f78a248b04856b5d60755486dcfed37 1 include/__stdarg___gnuc_va_list.h
+448 260706931 1755629988010218066 ee803b33be587fcb44ebc540dc1bd5b4 1 include/__stdarg_va_list.h
+793 260706889 1755629987996312694 1006f9f7bf4b5778d8a640391b9c5a1c 1 include/__stdarg_va_arg.h
+445 260706934 1755629988010691225 9c52fce0866e80d935dd268cff80c9c7 1 include/__stdarg___va_copy.h
+451 260706942 1755629988012334784 7472f18389b3074d0606de36cb9d29ce 1 include/__stdarg_va_copy.h
+28715 237952587 1745022003000000000 25eb5b38f36ffe6fe1535ee35bdd55a2 0 /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk/usr/include/Availability.h
+28765 237952316 1745022003000000000 57205d9c4da6e56bc833d65d3f62807f 0 /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk/usr/include/AvailabilityVersions.h
+68058 237952640 1745022003000000000 fe1803459d1669ec5bf8588a68328401 0 /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk/usr/include/AvailabilityInternal.h
+414503 237953291 1745022003000000000 29f74643c2f8fc4fbbd14c08dca16f05 0 /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk/usr/include/AvailabilityInternalLegacy.h

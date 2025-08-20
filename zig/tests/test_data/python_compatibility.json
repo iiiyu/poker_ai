@@ -1,0 +1,107 @@
+{
+  "description": "Test cases for validating compatibility between Zig and Python implementations",
+  "floating_point_tolerance": 1e-12,
+  "hand_evaluation_tests": [
+    {
+      "description": "Basic hand rankings should match exactly",
+      "cards": ["As", "Ks", "Qs", "Js", "Ts", "2h", "3h"],
+      "python_rank": 1,
+      "zig_rank": 1,
+      "tolerance": 0
+    },
+    {
+      "description": "Complex hand comparison",
+      "cards": ["Ah", "Kd", "Qs", "Jh", "9d", "8s", "7h"],
+      "python_rank": 6186,
+      "zig_rank": 6186,
+      "tolerance": 0
+    }
+  ],
+  "equity_calculation_tests": [
+    {
+      "description": "Pocket aces vs random hand",
+      "hole_cards": ["As", "Ah"],
+      "board": ["2s", "7h", "Qd"],
+      "opponents": 1,
+      "iterations": 1000,
+      "expected_equity_min": 0.75,
+      "expected_equity_max": 0.95,
+      "floating_point_tolerance": 0.05
+    },
+    {
+      "description": "Suited connectors on favorable flop",
+      "hole_cards": ["6h", "7h"],
+      "board": ["5h", "8s", "9d"],
+      "opponents": 1, 
+      "iterations": 1000,
+      "expected_equity_min": 0.45,
+      "expected_equity_max": 0.65,
+      "floating_point_tolerance": 0.05
+    }
+  ],
+  "clustering_tests": [
+    {
+      "description": "River clustering should be deterministic",
+      "river_combos": [
+        {
+          "hole_cards": ["As", "Ah"],
+          "board": ["2s", "7h", "Qd", "Kc", "3s"],
+          "expected_cluster": 1,
+          "ehs": 0.95
+        },
+        {
+          "hole_cards": ["2c", "3d"], 
+          "board": ["As", "Kh", "Qd", "Jc", "Ts"],
+          "expected_cluster": 200,
+          "ehs": 0.0
+        }
+      ]
+    }
+  ],
+  "cfr_tests": [
+    {
+      "description": "Strategy convergence should match within tolerance",
+      "game_setup": {
+        "num_players": 2,
+        "stack_size": 200,
+        "small_blind": 1,
+        "big_blind": 2
+      },
+      "iterations": 1000,
+      "exploitability_tolerance": 0.01,
+      "strategy_tolerance": 0.001
+    }
+  ],
+  "memory_tests": [
+    {
+      "description": "Memory usage should not exceed Python by more than 20%",
+      "operations": [
+        "hand_evaluation_1000_iterations",
+        "equity_calculation_100_iterations", 
+        "clustering_10_river_combos",
+        "cfr_100_iterations"
+      ],
+      "max_memory_ratio": 1.2
+    }
+  ],
+  "performance_benchmarks": [
+    {
+      "name": "hand_evaluation_speed",
+      "description": "Zig should be at least 2x faster than Python",
+      "iterations": 100000,
+      "min_speedup": 2.0
+    },
+    {
+      "name": "equity_calculation_speed", 
+      "description": "Zig should be at least 3x faster than Python",
+      "iterations": 10000,
+      "min_speedup": 3.0
+    },
+    {
+      "name": "clustering_speed",
+      "description": "Zig should be at least 5x faster than Python",
+      "river_combos": 1000,
+      "min_speedup": 5.0
+    }
+  ]
+}

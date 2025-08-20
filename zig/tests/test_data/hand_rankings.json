@@ -1,0 +1,120 @@
+{
+  "description": "Test cases for hand evaluation with expected rankings",
+  "test_cases": [
+    {
+      "name": "royal_flush_spades",
+      "cards": ["As", "Ks", "Qs", "Js", "Ts", "2h", "3h"],
+      "expected_rank": 1,
+      "hand_type": "straight flush",
+      "description": "Royal flush in spades"
+    },
+    {
+      "name": "royal_flush_hearts", 
+      "cards": ["Ah", "Kh", "Qh", "Jh", "Th", "2s", "3s"],
+      "expected_rank": 1,
+      "hand_type": "straight flush",
+      "description": "Royal flush in hearts"
+    },
+    {
+      "name": "straight_flush_nine_high",
+      "cards": ["9h", "8h", "7h", "6h", "5h", "2s", "3s"], 
+      "expected_rank": 2,
+      "hand_type": "straight flush",
+      "description": "Nine-high straight flush"
+    },
+    {
+      "name": "four_aces",
+      "cards": ["As", "Ah", "Ad", "Ac", "Ks", "2h", "3h"],
+      "expected_rank": 11,
+      "hand_type": "four of a kind", 
+      "description": "Four of a kind - Aces"
+    },
+    {
+      "name": "four_twos",
+      "cards": ["2s", "2h", "2d", "2c", "As", "Kh", "Qh"],
+      "expected_rank": 166,
+      "hand_type": "four of a kind",
+      "description": "Four of a kind - Twos (worst quads)"
+    },
+    {
+      "name": "full_house_aces_kings",
+      "cards": ["As", "Ah", "Ad", "Ks", "Kh", "2s", "3s"],
+      "expected_rank": 167,
+      "hand_type": "full house",
+      "description": "Full house - Aces over Kings"
+    },
+    {
+      "name": "flush_ace_high",
+      "cards": ["As", "Qs", "Ts", "8s", "6s", "2h", "3h"],
+      "expected_rank": 323,
+      "hand_type": "flush", 
+      "description": "Ace-high flush in spades"
+    },
+    {
+      "name": "straight_ace_high",
+      "cards": ["As", "Kh", "Qd", "Jc", "Ts", "2h", "3h"],
+      "expected_rank": 1600,
+      "hand_type": "straight",
+      "description": "Broadway straight (A-K-Q-J-T)"
+    },
+    {
+      "name": "straight_wheel",
+      "cards": ["5s", "4h", "3d", "2c", "As", "Kh", "Qh"],
+      "expected_rank": 1609, 
+      "hand_type": "straight",
+      "description": "Wheel straight (A-2-3-4-5)"
+    },
+    {
+      "name": "three_aces",
+      "cards": ["As", "Ah", "Ad", "Ks", "Qh", "2s", "3s"],
+      "expected_rank": 1610,
+      "hand_type": "three of a kind",
+      "description": "Three of a kind - Aces"
+    },
+    {
+      "name": "two_pair_aces_kings",
+      "cards": ["As", "Ah", "Ks", "Kh", "Qs", "2d", "3d"],
+      "expected_rank": 2468,
+      "hand_type": "two pair",
+      "description": "Two pair - Aces and Kings"
+    },
+    {
+      "name": "pair_aces",
+      "cards": ["As", "Ah", "Ks", "Qh", "Jd", "9s", "8s"],
+      "expected_rank": 3326,
+      "hand_type": "pair",
+      "description": "Pair of Aces"
+    },
+    {
+      "name": "high_card_ace",
+      "cards": ["As", "Kh", "Qd", "Js", "9h", "7s", "5s"],
+      "expected_rank": 6186,
+      "hand_type": "high card",
+      "description": "Ace-high"
+    },
+    {
+      "name": "high_card_seven",
+      "cards": ["7s", "5h", "4d", "3s", "2h", "Ac", "Kc"],
+      "expected_rank": 7462,
+      "hand_type": "high card", 
+      "description": "Seven-high (worst possible hand)"
+    }
+  ],
+  "property_tests": [
+    {
+      "name": "hand_ordering",
+      "description": "Royal flush should beat all other hands",
+      "invariant": "royal_flush_rank < any_other_hand_rank"
+    },
+    {
+      "name": "suit_independence", 
+      "description": "Same rank pattern in different suits should have equal value",
+      "invariant": "royal_flush_spades_rank == royal_flush_hearts_rank"
+    },
+    {
+      "name": "uniqueness",
+      "description": "All 52 cards should have unique representations", 
+      "invariant": "card_count == 52 && all_cards_unique"
+    }
+  ]
+}

@@ -1,0 +1,448 @@
+# CI/CD Pipeline Configuration for Zig-Python Validation
+# This file can be adapted for GitHub Actions, GitLab CI, or other CI systems
+
+name: Zig-Python Validation Pipeline
+
+# Trigger conditions
+on:
+  push:
+    branches: [main, develop, feature/pluribus-api-enhancements]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Nightly validation at 2 AM UTC
+    - cron: '0 2 * * *'
+
+# Environment variables
+env:
+  ZIG_VERSION: "0.11.0"
+  PYTHON_VERSION: "3.9"
+  VALIDATION_MODE: "ci"
+
+jobs:
+  # Job 1: Setup and Build
+  setup-and-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Full history for proper analysis
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v2
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Cache Zig build
+      uses: actions/cache@v3
+      with:
+        path: |
+          zig-cache/
+          zig-out/
+        key: ${{ runner.os }}-zig-${{ hashFiles('**/*.zig') }}
+        restore-keys: |
+          ${{ runner.os }}-zig-
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-benchmark
+    
+    - name: Build Zig project
+      run: |
+        cd poker_ai/zig_clustering
+        zig build
+        zig build bench -Doptimize=ReleaseFast
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: |
+          poker_ai/zig_clustering/zig-out/
+          validation/
+        retention-days: 7
+
+  # Job 2: Algorithmic Correctness Validation
+  algorithmic-validation:
+    needs: setup-and-build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v2
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: build-artifacts
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Run algorithmic correctness tests
+      run: |
+        python -m validation.algorithmic_correctness
+      timeout-minutes: 30
+    
+    - name: Upload algorithmic test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: algorithmic-test-results
+        path: validation/results/algorithmic_correctness_*.json
+        retention-days: 30
+
+  # Job 3: Performance Regression Testing
+  performance-validation:
+    needs: setup-and-build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v2
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: build-artifacts
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install psutil
+    
+    - name: Run performance regression tests
+      run: |
+        python -m validation.performance_regression
+      timeout-minutes: 45
+    
+    - name: Upload performance test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: performance-test-results
+        path: |
+          validation/results/performance_regression_*.json
+          validation/performance_baseline.json
+        retention-days: 30
+
+  # Job 4: Integration Testing
+  integration-validation:
+    needs: setup-and-build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v2
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: build-artifacts
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Run integration tests
+      run: |
+        python -m validation.integration_suite
+      timeout-minutes: 60
+    
+    - name: Upload integration test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: integration-test-results
+        path: validation/results/integration_suite_*.json
+        retention-days: 30
+
+  # Job 5: Memory Profiling (Nightly only)
+  memory-validation:
+    needs: setup-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'  # Only run on nightly schedule
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v2
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: build-artifacts
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install psutil memory-profiler
+    
+    - name: Run memory profiling tests
+      run: |
+        python -m validation.memory_profiling
+      timeout-minutes: 90
+    
+    - name: Upload memory test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: memory-test-results
+        path: validation/results/memory_profiling_*.json
+        retention-days: 30
+
+  # Job 6: Convergence Testing (Nightly only)
+  convergence-validation:
+    needs: setup-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'  # Only run on nightly schedule
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v2
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: build-artifacts
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install numpy scipy
+    
+    - name: Run convergence tests
+      run: |
+        python -m validation.convergence_test
+      timeout-minutes: 120
+    
+    - name: Upload convergence test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: convergence-test-results
+        path: validation/results/convergence_test_*.json
+        retention-days: 30
+
+  # Job 7: Comprehensive Validation Report
+  validation-report:
+    needs: [algorithmic-validation, performance-validation, integration-validation]
+    runs-on: ubuntu-latest
+    if: always()  # Run even if some tests fail
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Download all test results
+      uses: actions/download-artifact@v3
+      with:
+        path: validation-results/
+    
+    - name: Generate comprehensive validation report
+      run: |
+        python validation/generate_ci_report.py --results-dir validation-results/
+    
+    - name: Upload validation report
+      uses: actions/upload-artifact@v3
+      with:
+        name: validation-report
+        path: |
+          validation/results/ci_validation_report.html
+          validation/results/ci_validation_report.json
+        retention-days: 90
+    
+    - name: Comment PR with validation results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const path = 'validation/results/ci_validation_report.json';
+          
+          if (fs.existsSync(path)) {
+            const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+            
+            const summary = report.summary;
+            const status = summary.overall_passed ? '✅ PASSED' : '❌ FAILED';
+            
+            const comment = `
+          ## 🔍 Validation Results ${status}
+          
+          **Overall Status:** ${status}
+          **Success Rate:** ${(summary.overall_success_rate * 100).toFixed(1)}%
+          **Tests:** ${summary.passed_tests}/${summary.total_tests} passed
+          **Duration:** ${(summary.duration / 60).toFixed(1)} minutes
+          
+          ### Validator Results
+          ${Object.entries(report.validator_results).map(([name, result]) => 
+            `- ${result.success ? '✅' : '❌'} **${name}**: ${result.summary.passed}/${result.summary.total} tests (${(result.summary.success_rate * 100).toFixed(1)}%)`
+          ).join('\n')}
+          
+          ${summary.overall_passed ? 
+            '🎉 All validations passed! The changes are compatible with the Zig implementation.' :
+            '⚠️ Some validations failed. Please review the test results before merging.'
+          }
+          
+          [View detailed report](../../actions/runs/${{ github.run_id }})
+          `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          }
+
+  # Job 8: Golden Dataset Generation (Nightly only)
+  golden-dataset-generation:
+    needs: setup-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'  # Only run on nightly schedule
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Generate golden datasets
+      run: |
+        python -m validation.golden_dataset
+      timeout-minutes: 60
+    
+    - name: Upload golden datasets
+      uses: actions/upload-artifact@v3
+      with:
+        name: golden-datasets
+        path: validation/golden_datasets/
+        retention-days: 365  # Keep golden datasets for 1 year
+
+  # Job 9: Validation Status Check
+  validation-status:
+    needs: [algorithmic-validation, performance-validation, integration-validation]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Check validation status
+      run: |
+        # Determine overall validation status
+        ALGORITHMIC_STATUS="${{ needs.algorithmic-validation.result }}"
+        PERFORMANCE_STATUS="${{ needs.performance-validation.result }}"
+        INTEGRATION_STATUS="${{ needs.integration-validation.result }}"
+        
+        echo "Algorithmic validation: $ALGORITHMIC_STATUS"
+        echo "Performance validation: $PERFORMANCE_STATUS"
+        echo "Integration validation: $INTEGRATION_STATUS"
+        
+        # Require all critical validations to pass
+        if [ "$ALGORITHMIC_STATUS" = "success" ] && [ "$PERFORMANCE_STATUS" = "success" ] && [ "$INTEGRATION_STATUS" = "success" ]; then
+          echo "✅ All critical validations passed"
+          exit 0
+        else
+          echo "❌ Critical validations failed"
+          exit 1
+        fi
+
+# Workflow configuration
+defaults:
+  run:
+    shell: bash
+
+# Concurrency control
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
