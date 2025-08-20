@@ -180,7 +180,7 @@ pub const GameState = struct {
         };
         
         // Initialize players
-        for (&state.players[0..num_players], 0..) |*player, i| {
+        for (state.players[0..num_players], 0..) |*player, i| {
             player.* = Player.init(@intCast(i), 1000); // Default stack
         }
         
@@ -293,7 +293,7 @@ pub const GameState = struct {
             self.round = next_round;
             
             // Reset betting for new round
-            for (&self.players[0..self.num_players]) |*player| {
+            for (self.players[0..self.num_players]) |*player| {
                 player.bet_this_round = 0;
             }
             

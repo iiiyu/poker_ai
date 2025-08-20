@@ -190,14 +190,14 @@ pub const StrategyProfile = struct {
 
 // Main strategy table for storing all learned strategies
 pub const StrategyTable = struct {
-    strategies: std.HashMap(u64, StrategyProfile, std.hash_map.default_max_load_percentage),
+    strategies: std.hash_map.HashMap(u64, StrategyProfile, std.hash_map.AutoContext(u64), 80),
     allocator: std.mem.Allocator,
     
     const Self = @This();
     
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
-            .strategies = std.HashMap(u64, StrategyProfile, std.hash_map.default_max_load_percentage).init(allocator),
+            .strategies = std.hash_map.HashMap(u64, StrategyProfile, std.hash_map.AutoContext(u64), 80).init(allocator),
             .allocator = allocator,
         };
     }

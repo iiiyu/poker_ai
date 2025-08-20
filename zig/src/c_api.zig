@@ -34,7 +34,7 @@ const PokerHandle = struct {
 };
 
 // Global handle management
-var g_handles = std.HashMap(u32, PokerHandle, std.hash_map.default_max_load_percentage).init(std.heap.c_allocator);
+var g_handles = std.hash_map.HashMap(u32, PokerHandle, std.hash_map.AutoContext(u32), 80).init(std.heap.c_allocator);
 var g_next_handle_id: u32 = 1;
 var g_handle_mutex = std.Thread.Mutex{};
 
@@ -62,10 +62,7 @@ export fn poker_ai_cleanup() void {
 // Hand Evaluator C API
 export fn poker_hand_evaluator_create() u32 {
     const evaluator = std.heap.c_allocator.create(hand_eval.HandEvaluator) catch return 0;
-    evaluator.* = hand_eval.HandEvaluator.init(std.heap.c_allocator) catch {
-        std.heap.c_allocator.destroy(evaluator);
-        return 0;
-    };
+    evaluator.* = hand_eval.HandEvaluator.init();
     
     return registerHandle(PokerHandle{
         .handle_type = .hand_evaluator,
@@ -84,10 +81,17 @@ export fn poker_hand_evaluate_5(handle: u32, cards: [*c]const u8) u32 {
     
     if (cards == null) return 0;
     
-    const card_array = [5]u8{ cards[0], cards[1], cards[2], cards[3], cards[4] };
-    const result = eval_ptr.evaluate5(card_array);
+    // Convert u8 to Card (Card is just u32 in hand_eval)
+    const card_array = [5]hand_eval.Card{ 
+        @as(hand_eval.Card, cards[0]), 
+        @as(hand_eval.Card, cards[1]), 
+        @as(hand_eval.Card, cards[2]), 
+        @as(hand_eval.Card, cards[3]), 
+        @as(hand_eval.Card, cards[4]) 
+    };
+    const result = eval_ptr.evaluateFive(card_array);
     
-    return result.value;
+    return result;
 }
 
 export fn poker_hand_evaluate_7(handle: u32, cards: [*c]const u8) u32 {
@@ -96,13 +100,19 @@ export fn poker_hand_evaluate_7(handle: u32, cards: [*c]const u8) u32 {
     
     if (cards == null) return 0;
     
-    const card_array = [7]u8{ 
-        cards[0], cards[1], cards[2], cards[3], 
-        cards[4], cards[5], cards[6] 
+    // Convert u8 to Card (Card is just u32 in hand_eval)
+    const card_array = [7]hand_eval.Card{ 
+        @as(hand_eval.Card, cards[0]), 
+        @as(hand_eval.Card, cards[1]), 
+        @as(hand_eval.Card, cards[2]), 
+        @as(hand_eval.Card, cards[3]), 
+        @as(hand_eval.Card, cards[4]), 
+        @as(hand_eval.Card, cards[5]), 
+        @as(hand_eval.Card, cards[6]) 
     };
-    const result = eval_ptr.evaluate7(card_array);
+    const result = eval_ptr.evaluateSeven(card_array);
     
-    return result.value;
+    return result;
 }
 
 // Game State C API
@@ -278,11 +288,13 @@ export fn poker_card_from_rank_suit(rank: u8, suit: u8) u8 {
 }
 
 export fn poker_card_get_rank(card: u8) u8 {
-    return hand_eval.cardRank(card);
+    // Extract rank from card representation (bits 2-5)
+    return card >> 2;
 }
 
 export fn poker_card_get_suit(card: u8) u8 {
-    return hand_eval.cardSuit(card);
+    // Extract suit from card representation (bits 0-1)
+    return card & 0x03;
 }
 
 // Helper functions
@@ -325,7 +337,7 @@ fn cleanupHandle(handle: PokerHandle) void {
     switch (handle.handle_type) {
         .hand_evaluator => {
             const evaluator: *hand_eval.HandEvaluator = @ptrCast(@alignCast(handle.ptr));
-            evaluator.deinit();
+            // HandEvaluator has no deinit
             handle.allocator.destroy(evaluator);
         },
         .game_state => {

@@ -27,18 +27,25 @@ pub const ThreadSafeStrategyTable = struct {
     pub fn getOrCreateStrategy(
         self: *Self,
         info_set_hash: u64,
-        actions: []const game_state.ActionType,
+        actions: []const game_state.Action,
     ) !*strategy_table.StrategyProfile {
         self.mutex.lock();
         defer self.mutex.unlock();
         
-        return self.strategy_table.getOrCreateStrategy(info_set_hash, actions);
+        // Convert Actions to ActionTypes for strategy table
+        var action_types = try self.strategy_table.allocator.alloc(game_state.ActionType, actions.len);
+        defer self.strategy_table.allocator.free(action_types);
+        for (actions, 0..) |action, i| {
+            action_types[i] = action.action_type;
+        }
+        
+        return self.strategy_table.getOrCreateStrategy(info_set_hash, action_types);
     }
     
     pub fn updateStrategy(
         self: *Self,
         info_set_hash: u64,
-        action: game_state.ActionType,
+        action: game_state.Action,
         regret: f64,
         strategy: []const f64,
         weight: f64,
@@ -46,7 +53,7 @@ pub const ThreadSafeStrategyTable = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         
-        try self.strategy_table.updateStrategy(info_set_hash, action, regret, strategy, weight);
+        try self.strategy_table.updateStrategy(info_set_hash, action.action_type, regret, strategy, weight);
     }
     
     pub fn saveToFile(self: *Self, file_path: []const u8) !void {
@@ -78,9 +85,9 @@ const WorkerData = struct {
     config: cfr.CFRConfig,
     allocator: std.mem.Allocator,
     
-    // Thread-local statistics
-    nodes_processed: std.atomic.Value(u32),
-    total_utility: std.atomic.Value(f64),
+    // Thread-local statistics (non-atomic, will be collected at the end)
+    nodes_processed: u32,
+    total_utility: f64,
 };
 
 // Parallel CFR trainer
@@ -134,8 +141,8 @@ pub const ParallelCFRTrainer = struct {
                 .shared_table = &self.shared_strategy_table,
                 .config = self.config,
                 .allocator = self.allocator,
-                .nodes_processed = std.atomic.Value(u32).init(0),
-                .total_utility = std.atomic.Value(f64).init(0.0),
+                .nodes_processed = 0,
+                .total_utility = 0.0,
             };
             
             thread.* = try std.Thread.spawn(.{}, workerFunction, .{&worker_data[i]});
@@ -151,8 +158,8 @@ pub const ParallelCFRTrainer = struct {
         var total_utility: f64 = 0.0;
         
         for (worker_data) |*data| {
-            total_nodes += data.nodes_processed.load(.acquire);
-            total_utility += data.total_utility.load(.acquire);
+            total_nodes += data.nodes_processed;
+            total_utility += data.total_utility;
         }
         
         std.log.info("Parallel MCCFR training completed: {} nodes processed, avg utility: {d:.6}", 
@@ -178,17 +185,15 @@ pub const ParallelCFRTrainer = struct {
 // Worker thread function
 fn workerFunction(worker_data: *WorkerData) void {
     // Create thread-local CFR trainer components
-    var local_abstraction_table = lookup_tables.AbstractionTable.init(worker_data.allocator) catch {
-        std.log.err("Failed to initialize abstraction table in worker thread {}", .{worker_data.work_unit.thread_id});
-        return;
-    };
-    defer local_abstraction_table.deinit();
+    // TODO: AbstractionTable not yet implemented
+    // var local_abstraction_table = lookup_tables.AbstractionTable.init(worker_data.allocator) catch {
+    //     std.log.err("Failed to initialize abstraction table in worker thread {}", .{worker_data.work_unit.thread_id});
+    //     return;
+    // };
+    // defer local_abstraction_table.deinit();
     
-    var local_hand_evaluator = hand_eval.HandEvaluator.init(worker_data.allocator) catch {
-        std.log.err("Failed to initialize hand evaluator in worker thread {}", .{worker_data.work_unit.thread_id});
-        return;
-    };
-    defer local_hand_evaluator.deinit();
+    var local_hand_evaluator = hand_eval.HandEvaluator.init();
+    // HandEvaluator has no deinit
     
     // Thread-local RNG
     var rng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp() + worker_data.work_unit.thread_id));
@@ -220,19 +225,9 @@ fn workerFunction(worker_data: *WorkerData) void {
                 continue;
             };
             
-            // Update statistics
-            _ = worker_data.nodes_processed.fetchAdd(1, .release);
-            
-            const current_total = worker_data.total_utility.load(.acquire);
-            while (worker_data.total_utility.cmpxchgWeak(
-                current_total,
-                current_total + utility,
-                .release,
-                .acquire,
-            )) |actual| {
-                _ = actual;
-                // Retry with updated value
-            }
+            // Update statistics (thread-local, no atomics needed)
+            worker_data.nodes_processed += 1;
+            worker_data.total_utility += utility;
         }
         
         // Periodic progress reporting
@@ -288,8 +283,16 @@ fn runCFRLocal(
     // Sample action based on strategy or use deterministic exploration
     const sample_action_index = if (rng.random().float(f64) < 0.05) 
         rng.random().uintLessThan(usize, actions.len) // 5% random exploration
-    else 
-        strategy_profile.action_probs.sampleAction(rng.random()).index; // Should implement index method
+    else blk: {
+        const sampled_action = strategy_profile.action_probs.sampleAction(rng.random());
+        // Find the index of this action in our actions array
+        for (actions, 0..) |action, idx| {
+            if (action.action_type == sampled_action) {
+                break :blk idx;
+            }
+        }
+        break :blk 0; // Default to first action if not found
+    };
     
     for (actions, 0..) |action, i| {
         var new_game = try cloneGameStateLocal(game_state_ptr, allocator);
@@ -350,7 +353,7 @@ fn createRandomGameLocal(allocator: std.mem.Allocator, rng: *std.Random.DefaultP
     rng.random().shuffle(u8, deck.items);
     
     // Deal hole cards
-    const hands = [2][2]u8{
+    var hands = [2][2]u8{
         .{ deck.items[0], deck.items[1] },
         .{ deck.items[2], deck.items[3] },
     };
@@ -391,26 +394,26 @@ fn cloneGameStateLocal(original: *game_state.GameState, allocator: std.mem.Alloc
     return clone;
 }
 
-fn getAvailableActionsLocal(game_state_ptr: *game_state.GameState, allocator: std.mem.Allocator) ![]game_state.ActionType {
-    var actions = std.ArrayList(game_state.ActionType).init(allocator);
+fn getAvailableActionsLocal(game_state_ptr: *game_state.GameState, allocator: std.mem.Allocator) ![]game_state.Action {
+    var actions = std.ArrayList(game_state.Action).init(allocator);
     
     const current_bet = game_state_ptr.current_bet;
     const player = &game_state_ptr.players[game_state_ptr.current_player];
     
     // Always allow fold
-    try actions.append(.fold);
+    try actions.append(game_state.Action.fold());
     
     // Check or call
     if (current_bet == player.bet_this_round) {
-        try actions.append(.check);
+        try actions.append(game_state.Action.check());
     } else {
-        try actions.append(.call);
+        try actions.append(game_state.Action.call());
     }
     
     // Raise if possible
     const min_raise = current_bet + game_state_ptr.big_blind;
     if (min_raise <= player.stack + player.bet_this_round) {
-        try actions.append(.raise);
+        try actions.append(game_state.Action.raise(min_raise));
     }
     
     return actions.toOwnedSlice();
@@ -437,7 +440,7 @@ test "thread safe strategy table" {
     var table = ThreadSafeStrategyTable.init(testing.allocator);
     defer table.deinit();
     
-    const actions = [_]game_state.ActionType{ .fold, .call };
+    const actions = [_]game_state.Action{ game_state.Action.fold(), game_state.Action.call() };
     const strategy = try table.getOrCreateStrategy(12345, &actions);
     
     try testing.expectEqual(@as(u64, 12345), strategy.info_set_hash);
