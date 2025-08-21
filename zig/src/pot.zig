@@ -12,10 +12,12 @@
 
 const std = @import("std");
 const player = @import("player.zig");
+const game_engine = @import("game_engine.zig");
 
 pub const ChipAmount = u32;
 pub const PlayerId = u8;
 pub const Player = player.Player;
+pub const MAX_PLAYERS = game_engine.MAX_PLAYERS;
 
 /// Individual pot (main or side pot)
 pub const Pot = struct {
@@ -63,7 +65,7 @@ pub const Pot = struct {
 pub const PotManager = struct {
     main_pot: Pot,
     side_pots: std.ArrayList(Pot),
-    total_contributions: [8]ChipAmount, // Track per player contributions
+    total_contributions: [MAX_PLAYERS]ChipAmount, // Track per player contributions
     allocator: std.mem.Allocator,
     
     const Self = @This();
@@ -72,7 +74,7 @@ pub const PotManager = struct {
         return Self{
             .main_pot = Pot.init(allocator, std.math.maxInt(ChipAmount), false),
             .side_pots = std.ArrayList(Pot).init(allocator),
-            .total_contributions = [_]ChipAmount{0} ** 8,
+            .total_contributions = [_]ChipAmount{0} ** MAX_PLAYERS,
             .allocator = allocator,
         };
     }
@@ -94,12 +96,17 @@ pub const PotManager = struct {
         }
         self.side_pots.clearRetainingCapacity();
         
-        self.total_contributions = [_]ChipAmount{0} ** 8;
+        self.total_contributions = [_]ChipAmount{0} ** MAX_PLAYERS;
     }
     
     /// Add chips to pot from a player
     pub fn addToPot(self: *Self, amount: ChipAmount, player_id: PlayerId) !void {
         if (amount == 0) return;
+        
+        // Bounds check
+        if (player_id >= MAX_PLAYERS) {
+            return error.InvalidPlayerId;
+        }
         
         self.total_contributions[player_id] += amount;
         

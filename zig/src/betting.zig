@@ -12,10 +12,12 @@
 
 const std = @import("std");
 const player = @import("player.zig");
+const game_engine = @import("game_engine.zig");
 
 pub const ChipAmount = u32;
 pub const PlayerId = u8;
 pub const Player = player.Player;
+pub const MAX_PLAYERS = game_engine.MAX_PLAYERS;
 
 /// Betting round state
 pub const BettingRound = enum(u8) {
@@ -67,8 +69,8 @@ pub const BettingManager = struct {
     num_players_to_act: u8,
     
     // Player tracking
-    players_who_acted: [8]bool,
-    player_final_actions: [8]?u8, // Last action type for each player
+    players_who_acted: [MAX_PLAYERS]bool,
+    player_final_actions: [MAX_PLAYERS]?u8, // Last action type for each player
     
     // Action history for this round
     action_sequence: std.ArrayList(ActionSummary),
@@ -95,8 +97,8 @@ pub const BettingManager = struct {
             .num_raises_this_round = 0,
             .num_players_acted = 0,
             .num_players_to_act = 0,
-            .players_who_acted = [_]bool{false} ** 8,
-            .player_final_actions = [_]?u8{null} ** 8,
+            .players_who_acted = [_]bool{false} ** MAX_PLAYERS,
+            .player_final_actions = [_]?u8{null} ** MAX_PLAYERS,
             .action_sequence = undefined, // Will be set with allocator
             .min_raise_amount = 0,
             .max_raises_allowed = 3,
@@ -128,8 +130,8 @@ pub const BettingManager = struct {
         self.num_raises_this_round = 0;
         self.num_players_acted = 0;
         self.num_players_to_act = 0;
-        self.players_who_acted = [_]bool{false} ** 8;
-        self.player_final_actions = [_]?u8{null} ** 8;
+        self.players_who_acted = [_]bool{false} ** MAX_PLAYERS;
+        self.player_final_actions = [_]?u8{null} ** MAX_PLAYERS;
         if (@hasField(@TypeOf(self.action_sequence), "allocator")) {
             self.action_sequence.clearRetainingCapacity();
         }
@@ -151,8 +153,8 @@ pub const BettingManager = struct {
         self.last_aggressor = null;
         self.num_raises_this_round = 0;
         self.num_players_acted = 0;
-        self.players_who_acted = [_]bool{false} ** 8;
-        self.player_final_actions = [_]?u8{null} ** 8;
+        self.players_who_acted = [_]bool{false} ** MAX_PLAYERS;
+        self.player_final_actions = [_]?u8{null} ** MAX_PLAYERS;
         
         // Count players who can act
         self.num_players_to_act = 0;
@@ -177,6 +179,9 @@ pub const BettingManager = struct {
         player_id: PlayerId, 
         amount: ChipAmount 
     }) void {
+        // Bounds check
+        if (action.player_id >= MAX_PLAYERS) return;
+        
         // Mark player as having acted
         if (!self.players_who_acted[action.player_id]) {
             self.players_who_acted[action.player_id] = true;
