@@ -76,6 +76,9 @@ fn createDefaultConfig(allocator: std.mem.Allocator) !cli_parser.Config {
     config.display_mode = .normal;
     config.max_hands = null; // Unlimited by default
     
+    // Allocate players array
+    config.players = try allocator.alloc(cli_parser.PlayerConfig, config.num_players);
+    
     // Configure players: Human player + AI opponents
     config.players[0] = cli_parser.PlayerConfig{
         .type = .human,
@@ -116,13 +119,42 @@ fn parseCommandLineArgs(allocator: std.mem.Allocator) !?cli_parser.Config {
                 std.debug.print("Error: --players requires a value\n", .{});
                 return error.MissingArgument;
             };
-            config.num_players = std.fmt.parseInt(u8, value, 10) catch {
+            const new_player_count = std.fmt.parseInt(u8, value, 10) catch {
                 std.debug.print("Error: Invalid player count '{s}'\n", .{value});
                 return error.InvalidNumber;
             };
-            if (config.num_players < 2 or config.num_players > 6) {
+            if (new_player_count < 2 or new_player_count > 6) {
                 std.debug.print("Error: Player count must be between 2 and 6\n", .{});
                 return error.InvalidPlayerCount;
+            }
+            
+            // If player count changed, reallocate players array
+            if (new_player_count != config.num_players) {
+                // Free old players array
+                for (config.players) |player| {
+                    allocator.free(player.name);
+                }
+                allocator.free(config.players);
+                
+                config.num_players = new_player_count;
+                
+                // Allocate new players array
+                config.players = try allocator.alloc(cli_parser.PlayerConfig, config.num_players);
+                
+                // Re-initialize players
+                config.players[0] = cli_parser.PlayerConfig{
+                    .type = .human,
+                    .name = try allocator.dupe(u8, "Human"),
+                    .stack_size = config.starting_stack,
+                };
+                
+                for (1..config.num_players) |i| {
+                    config.players[i] = cli_parser.PlayerConfig{
+                        .type = .ai_medium,
+                        .name = try std.fmt.allocPrint(allocator, "AI {d}", .{i}),
+                        .stack_size = config.starting_stack,
+                    };
+                }
             }
         } else if (std.mem.eql(u8, arg, "--starting-stack")) {
             const value = args.next() orelse {
@@ -208,7 +240,9 @@ fn parseCommandLineArgs(allocator: std.mem.Allocator) !?cli_parser.Config {
             
             // Update AI players with new type
             for (1..config.num_players) |i| {
-                config.players[i].type = ai_type;
+                if (i < config.players.len) {
+                    config.players[i].type = ai_type;
+                }
             }
         } else {
             std.debug.print("Error: Unknown argument '{s}'\n", .{arg});
