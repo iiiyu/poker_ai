@@ -10,20 +10,20 @@ const game_state = @import("game_state.zig");
 pub const ThreadSafeStrategyTable = struct {
     strategy_table: strategy_table.StrategyTable,
     mutex: std.Thread.Mutex,
-    
+
     const Self = @This();
-    
+
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .strategy_table = strategy_table.StrategyTable.init(allocator),
             .mutex = std.Thread.Mutex{},
         };
     }
-    
+
     pub fn deinit(self: *Self) void {
         self.strategy_table.deinit();
     }
-    
+
     pub fn getOrCreateStrategy(
         self: *Self,
         info_set_hash: u64,
@@ -31,17 +31,17 @@ pub const ThreadSafeStrategyTable = struct {
     ) !*strategy_table.StrategyProfile {
         self.mutex.lock();
         defer self.mutex.unlock();
-        
+
         // Convert Actions to ActionTypes for strategy table
         var action_types = try self.strategy_table.allocator.alloc(game_state.ActionType, actions.len);
         defer self.strategy_table.allocator.free(action_types);
         for (actions, 0..) |action, i| {
             action_types[i] = action.action_type;
         }
-        
+
         return self.strategy_table.getOrCreateStrategy(info_set_hash, action_types);
     }
-    
+
     pub fn updateStrategy(
         self: *Self,
         info_set_hash: u64,
@@ -52,21 +52,21 @@ pub const ThreadSafeStrategyTable = struct {
     ) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        
+
         try self.strategy_table.updateStrategy(info_set_hash, action.action_type, regret, strategy, weight);
     }
-    
+
     pub fn saveToFile(self: *Self, file_path: []const u8) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        
+
         try self.strategy_table.saveToFile(file_path);
     }
-    
+
     pub fn loadFromFile(self: *Self, file_path: []const u8) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        
+
         try self.strategy_table.loadFromFile(file_path);
     }
 };
@@ -84,7 +84,7 @@ const WorkerData = struct {
     shared_table: *ThreadSafeStrategyTable,
     config: cfr.CFRConfig,
     allocator: std.mem.Allocator,
-    
+
     // Thread-local statistics (non-atomic, will be collected at the end)
     nodes_processed: u32,
     total_utility: f64,
@@ -96,9 +96,9 @@ pub const ParallelCFRTrainer = struct {
     shared_strategy_table: ThreadSafeStrategyTable,
     num_threads: u32,
     allocator: std.mem.Allocator,
-    
+
     const Self = @This();
-    
+
     pub fn init(allocator: std.mem.Allocator, config: cfr.CFRConfig, num_threads: u32) Self {
         return Self{
             .config = config,
@@ -107,31 +107,31 @@ pub const ParallelCFRTrainer = struct {
             .allocator = allocator,
         };
     }
-    
+
     pub fn deinit(self: *Self) void {
         self.shared_strategy_table.deinit();
     }
-    
+
     // Run parallel CFR training
     pub fn train(self: *Self) !void {
         std.log.info("Starting parallel MCCFR training with {} threads", .{self.num_threads});
-        
+
         // Create worker threads
         const threads = try self.allocator.alloc(std.Thread, self.num_threads);
         defer self.allocator.free(threads);
-        
+
         var worker_data = try self.allocator.alloc(WorkerData, self.num_threads);
         defer self.allocator.free(worker_data);
-        
+
         // Calculate work distribution
         const iterations_per_thread = self.config.iterations / self.num_threads;
         const remaining_iterations = self.config.iterations % self.num_threads;
-        
+
         // Initialize worker data and spawn threads
         for (threads, 0..) |*thread, i| {
-            const thread_iterations = iterations_per_thread + 
+            const thread_iterations = iterations_per_thread +
                 (if (i < remaining_iterations) @as(u32, 1) else 0);
-            
+
             worker_data[i] = WorkerData{
                 .work_unit = WorkUnit{
                     .iteration_start = @intCast(i * iterations_per_thread),
@@ -144,38 +144,37 @@ pub const ParallelCFRTrainer = struct {
                 .nodes_processed = 0,
                 .total_utility = 0.0,
             };
-            
+
             thread.* = try std.Thread.spawn(.{}, workerFunction, .{&worker_data[i]});
         }
-        
+
         // Wait for all threads to complete
         for (threads) |*thread| {
             thread.join();
         }
-        
+
         // Collect statistics
         var total_nodes: u32 = 0;
         var total_utility: f64 = 0.0;
-        
+
         for (worker_data) |*data| {
             total_nodes += data.nodes_processed;
             total_utility += data.total_utility;
         }
-        
-        std.log.info("Parallel MCCFR training completed: {} nodes processed, avg utility: {d:.6}", 
-                    .{ total_nodes, total_utility / @as(f64, @floatFromInt(self.config.iterations)) });
+
+        std.log.info("Parallel MCCFR training completed: {} nodes processed, avg utility: {d:.6}", .{ total_nodes, total_utility / @as(f64, @floatFromInt(self.config.iterations)) });
     }
-    
+
     // Save trained strategy to file
     pub fn saveStrategy(self: *Self, file_path: []const u8) !void {
         try self.shared_strategy_table.saveToFile(file_path);
     }
-    
+
     // Load pre-trained strategy from file
     pub fn loadStrategy(self: *Self, file_path: []const u8) !void {
         try self.shared_strategy_table.loadFromFile(file_path);
     }
-    
+
     // Get strategy table for external use
     pub fn getStrategyTable(self: *Self) *ThreadSafeStrategyTable {
         return &self.shared_strategy_table;
@@ -191,24 +190,24 @@ fn workerFunction(worker_data: *WorkerData) void {
     //     return;
     // };
     // defer local_abstraction_table.deinit();
-    
+
     var local_hand_evaluator = hand_eval.HandEvaluator.init();
     // HandEvaluator has no deinit
-    
+
     // Thread-local RNG
     var rng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp() + worker_data.work_unit.thread_id));
-    
+
     // Process assigned iterations
     for (0..worker_data.work_unit.iteration_count) |local_iteration| {
         const global_iteration = worker_data.work_unit.iteration_start + @as(u32, @intCast(local_iteration));
-        
+
         // Create random game scenario
         var game = createRandomGameLocal(worker_data.allocator, &rng) catch {
             std.log.err("Failed to create random game in worker thread {}", .{worker_data.work_unit.thread_id});
             continue;
         };
         defer game.deinit();
-        
+
         // Run CFR for each player
         for (0..game.num_players) |player_id| {
             const utility = runCFRLocal(
@@ -224,20 +223,19 @@ fn workerFunction(worker_data: *WorkerData) void {
                 std.log.err("CFR failed in worker thread {}", .{worker_data.work_unit.thread_id});
                 continue;
             };
-            
+
             // Update statistics (thread-local, no atomics needed)
             worker_data.nodes_processed += 1;
             worker_data.total_utility += utility;
         }
-        
+
         // Periodic progress reporting
         if (global_iteration % 1000 == 0) {
             std.log.debug("Thread {} completed iteration {}", .{ worker_data.work_unit.thread_id, global_iteration });
         }
     }
-    
-    std.log.info("Worker thread {} completed {} iterations", 
-                .{ worker_data.work_unit.thread_id, worker_data.work_unit.iteration_count });
+
+    std.log.info("Worker thread {} completed {} iterations", .{ worker_data.work_unit.thread_id, worker_data.work_unit.iteration_count });
 }
 
 // Thread-local CFR implementation
@@ -252,36 +250,36 @@ fn runCFRLocal(
     rng: *std.Random.DefaultPrng,
 ) !f64 {
     // hand_evaluator will be used for terminal evaluation in full implementation
-    
+
     if (game_state_ptr.isTerminal()) {
         return getUtilityLocal(game_state_ptr, player);
     }
-    
+
     const current_player = game_state_ptr.current_player;
-    
+
     // Get information set
     const info_set_data = try game_state_ptr.getInfoSet(current_player);
     defer allocator.free(info_set_data);
-    
+
     const info_set_hash = std.hash_map.hashString(info_set_data);
-    
+
     // Get available actions
     const actions = try getAvailableActionsLocal(game_state_ptr, allocator);
     defer allocator.free(actions);
-    
+
     // Get or create strategy profile
     const strategy_profile = try shared_table.getOrCreateStrategy(info_set_hash, actions);
-    
+
     // Calculate current strategy from regrets
     strategy_profile.computeCurrentStrategy();
-    
+
     var utilities = try allocator.alloc(f64, actions.len);
     defer allocator.free(utilities);
-    
+
     var node_utility: f64 = 0.0;
-    
+
     // Sample action based on strategy or use deterministic exploration
-    const sample_action_index = if (rng.random().float(f64) < 0.05) 
+    const sample_action_index = if (rng.random().float(f64) < 0.05)
         rng.random().uintLessThan(usize, actions.len) // 5% random exploration
     else blk: {
         const sampled_action = strategy_profile.action_probs.sampleAction(rng.random());
@@ -293,21 +291,21 @@ fn runCFRLocal(
         }
         break :blk 0; // Default to first action if not found
     };
-    
+
     for (actions, 0..) |action, i| {
         var new_game = try cloneGameStateLocal(game_state_ptr, allocator);
         defer new_game.deinit();
-        
+
         _ = try new_game.applyAction(action);
-        
+
         if (new_game.isBettingComplete()) {
             new_game.nextRound();
         }
-        
+
         const prob = strategy_profile.action_probs.probabilities[i];
         const new_p0 = if (current_player == 0) p0 * prob else p0;
         const new_p1 = if (current_player == 1) p1 * prob else p1;
-        
+
         // Use importance sampling for better convergence
         if (i == sample_action_index) {
             utilities[i] = try runCFRLocal(&new_game, player, new_p0, new_p1, shared_table, hand_evaluator, allocator, rng);
@@ -315,14 +313,14 @@ fn runCFRLocal(
         } else {
             utilities[i] = 0.0; // Don't traverse this branch
         }
-        
+
         node_utility += prob * utilities[i];
     }
-    
+
     // Update regrets for acting player
     if (current_player == player) {
         const counterfactual_prob = if (player == 0) p1 else p0;
-        
+
         for (actions, 0..) |action, i| {
             const regret = utilities[i] - node_utility;
             try shared_table.updateStrategy(
@@ -334,30 +332,30 @@ fn runCFRLocal(
             );
         }
     }
-    
+
     return node_utility;
 }
 
 // Helper functions
 fn createRandomGameLocal(allocator: std.mem.Allocator, rng: *std.Random.DefaultPrng) !game_state.GameState {
     var game = try game_state.GameState.init(allocator, 2, 5, 10);
-    
+
     // Create and shuffle deck
     var deck = std.ArrayList(u8).init(allocator);
     defer deck.deinit();
-    
+
     for (0..52) |i| {
         try deck.append(@intCast(i));
     }
-    
+
     rng.random().shuffle(u8, deck.items);
-    
+
     // Deal hole cards directly to players
     game.players[0].hand.cards[0] = deck.items[0];
     game.players[0].hand.cards[1] = deck.items[1];
     game.players[1].hand.cards[0] = deck.items[2];
     game.players[1].hand.cards[1] = deck.items[3];
-    
+
     return game;
 }
 
@@ -368,7 +366,7 @@ fn cloneGameStateLocal(original: *game_state.GameState, allocator: std.mem.Alloc
         original.small_blind,
         original.big_blind,
     );
-    
+
     // Copy all game state
     clone.players = original.players;
     clone.active_players = original.active_players;
@@ -380,7 +378,7 @@ fn cloneGameStateLocal(original: *game_state.GameState, allocator: std.mem.Alloc
     clone.pot = original.pot;
     clone.current_bet = original.current_bet;
     clone.last_raiser = original.last_raiser;
-    
+
     // Copy action history
     for (original.actions.items) |action| {
         try clone.actions.append(action);
@@ -388,93 +386,90 @@ fn cloneGameStateLocal(original: *game_state.GameState, allocator: std.mem.Alloc
     for (original.action_sequence.items) |action| {
         try clone.action_sequence.append(action);
     }
-    
+
     return clone;
 }
 
 fn getAvailableActionsLocal(game_state_ptr: *game_state.GameState, allocator: std.mem.Allocator) ![]game_state.Action {
     var actions = std.ArrayList(game_state.Action).init(allocator);
-    
+
     const current_bet = game_state_ptr.current_bet;
     const player = &game_state_ptr.players[game_state_ptr.current_player];
-    
+
     // Always allow fold
     try actions.append(game_state.Action.fold());
-    
+
     // Check or call
     if (current_bet == player.bet_this_round) {
         try actions.append(game_state.Action.check());
     } else {
         try actions.append(game_state.Action.call());
     }
-    
+
     // Raise if possible
     const min_raise = current_bet + game_state_ptr.big_blind;
     if (min_raise <= player.stack + player.bet_this_round) {
         try actions.append(game_state.Action.raise(min_raise));
     }
-    
+
     return actions.toOwnedSlice();
 }
 
 fn getUtilityLocal(game_state_ptr: *game_state.GameState, player: u8) f64 {
     if (game_state_ptr.active_players == 1) {
-        return if (game_state_ptr.players[player].is_active) 
-            @floatFromInt(game_state_ptr.pot) else 
+        return if (game_state_ptr.players[player].is_active)
+            @floatFromInt(game_state_ptr.pot)
+        else
             -@as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
     }
-    
+
     // Showdown - evaluate hands using proper hand evaluator
     const player_cards = game_state_ptr.players[player].hand.cards;
     const opponent = if (player == 0) @as(u8, 1) else 0;
     const opponent_cards = game_state_ptr.players[opponent].hand.cards;
-    
+
     // Build 7-card hands (2 hole cards + 5 board cards)
     var player_hand: [7]hand_eval.Card = undefined;
     var opponent_hand: [7]hand_eval.Card = undefined;
-    
+
     // Convert hole cards to evaluator format
     player_hand[0] = convertCardToEvalFormatLocal(player_cards[0]);
     player_hand[1] = convertCardToEvalFormatLocal(player_cards[1]);
     opponent_hand[0] = convertCardToEvalFormatLocal(opponent_cards[0]);
     opponent_hand[1] = convertCardToEvalFormatLocal(opponent_cards[1]);
-    
+
     // Add board cards
     for (0..game_state_ptr.board_size) |i| {
         const eval_card = convertCardToEvalFormatLocal(game_state_ptr.board[i]);
         player_hand[i + 2] = eval_card;
         opponent_hand[i + 2] = eval_card;
     }
-    
+
     // Fill remaining cards with dummy cards if board is not complete
     const dummy_card = convertCardToEvalFormatLocal(51); // Use last card as dummy
     for (game_state_ptr.board_size..5) |i| {
         player_hand[i + 2] = dummy_card;
         opponent_hand[i + 2] = dummy_card;
     }
-    
+
     // Create local evaluator for thread safety
     var evaluator = hand_eval.HandEvaluator.init();
-    
+
     // Evaluate hands based on board size
     const player_rank = if (game_state_ptr.board_size == 5)
         evaluator.evaluateSeven(player_hand)
     else if (game_state_ptr.board_size >= 3)
-        evaluator.evaluateFive([5]hand_eval.Card{
-            player_hand[0], player_hand[1], player_hand[2], player_hand[3], player_hand[4]
-        })
+        evaluator.evaluateFive([5]hand_eval.Card{ player_hand[0], player_hand[1], player_hand[2], player_hand[3], player_hand[4] })
     else
         hand_eval.MAX_HIGH_CARD; // Pre-flop, use default
-        
+
     const opponent_rank = if (game_state_ptr.board_size == 5)
         evaluator.evaluateSeven(opponent_hand)
     else if (game_state_ptr.board_size >= 3)
-        evaluator.evaluateFive([5]hand_eval.Card{
-            opponent_hand[0], opponent_hand[1], opponent_hand[2], opponent_hand[3], opponent_hand[4]
-        })
+        evaluator.evaluateFive([5]hand_eval.Card{ opponent_hand[0], opponent_hand[1], opponent_hand[2], opponent_hand[3], opponent_hand[4] })
     else
         hand_eval.MAX_HIGH_CARD;
-    
+
     // Lower rank = better hand
     if (player_rank < opponent_rank) {
         // Player wins
@@ -484,8 +479,8 @@ fn getUtilityLocal(game_state_ptr: *game_state.GameState, player: u8) f64 {
         return -@as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
     } else {
         // Split pot
-        return @as(f64, @floatFromInt(game_state_ptr.pot)) / 2.0 - 
-               @as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
+        return @as(f64, @floatFromInt(game_state_ptr.pot)) / 2.0 -
+            @as(f64, @floatFromInt(game_state_ptr.players[player].total_bet));
     }
 }
 
@@ -493,12 +488,12 @@ fn convertCardToEvalFormatLocal(card_idx: u8) hand_eval.Card {
     // Convert from 0-51 index to evaluator format
     const rank = card_idx % 13;
     const suit = card_idx / 13;
-    
+
     const rank_prime = hand_eval.PRIMES[rank];
     const bitrank: u32 = @as(u32, 1) << @intCast(rank + 16);
     const suit_bits: u32 = (@as(u32, 1) << @intCast(suit)) << 12;
     const rank_bits: u32 = @as(u32, rank) << 8;
-    
+
     return bitrank | suit_bits | rank_bits | rank_prime;
 }
 
@@ -508,22 +503,22 @@ const hand_eval = @import("hand_eval.zig");
 
 test "thread safe strategy table" {
     const testing = std.testing;
-    
+
     var table = ThreadSafeStrategyTable.init(testing.allocator);
     defer table.deinit();
-    
+
     const actions = [_]game_state.Action{ game_state.Action.fold(), game_state.Action.call() };
     const strategy = try table.getOrCreateStrategy(12345, &actions);
-    
+
     try testing.expectEqual(@as(u64, 12345), strategy.info_set_hash);
 }
 
 test "parallel cfr trainer initialization" {
     const testing = std.testing;
-    
+
     const config = cfr.CFRConfig.default();
     var trainer = ParallelCFRTrainer.init(testing.allocator, config, 2);
     defer trainer.deinit();
-    
+
     try testing.expectEqual(@as(u32, 2), trainer.num_threads);
 }

@@ -173,7 +173,7 @@ pub const TerminalUI = struct {
         const menu_items = [_]MainMenuItem{ .play_game, .train_ai, .analyze_hands, .settings, .view_stats, .quit };
 
         var selected_index: usize = 0;
-        
+
         // Draw menu once initially
         try self.drawMainMenu(menu_items[0..], selected_index);
 
@@ -275,12 +275,11 @@ pub const TerminalUI = struct {
         const menu_items = [_]SettingsMenuItem{ .display_mode, .sound_effects, .ai_difficulty, .betting_structure, .player_names, .save_settings, .back };
 
         var selected_index: usize = 0;
-        
+
         // Draw menu once initially
         try self.drawSettingsMenu(menu_items[0..], selected_index);
 
         while (self.current_menu == .settings_menu and self.is_running) {
-
             const input_event = try self.input.handleMenu(&[_][]const u8{
                 menu_items[0].toString(),
                 menu_items[1].toString(),
@@ -370,7 +369,7 @@ pub const TerminalUI = struct {
     fn handleGame(self: *TerminalUI) !void {
         // Clear screen once at the start of the game
         ascii_cards.Screen.clear();
-        
+
         // Initialize game
         const game_config = game_engine.GameConfig{
             .small_blind = self.config.small_blind,
@@ -444,14 +443,14 @@ pub const TerminalUI = struct {
         // Get available actions based on current game state
         const legal_actions = try game.getLegalActions();
         defer self.allocator.free(legal_actions);
-        
+
         // Convert ActionTypes to action_validator.ActionType
         const validator_actions = try self.allocator.alloc(action_validator.ActionType, legal_actions.len);
         defer self.allocator.free(validator_actions);
         for (legal_actions, 0..) |action, i| {
             validator_actions[i] = @enumFromInt(@intFromEnum(action));
         }
-        
+
         // Create a simple validation result for UI compatibility
         const validation = action_validator.ValidationResult{
             .is_valid = true,
@@ -557,14 +556,14 @@ pub const TerminalUI = struct {
         // Get available actions
         const legal_actions = try game.getLegalActions();
         defer self.allocator.free(legal_actions);
-        
+
         // Convert ActionTypes to action_validator.ActionType
         const validator_actions = try self.allocator.alloc(action_validator.ActionType, legal_actions.len);
         defer self.allocator.free(validator_actions);
         for (legal_actions, 0..) |action, i| {
             validator_actions[i] = @enumFromInt(@intFromEnum(action));
         }
-        
+
         // Create a simple validation result for UI compatibility
         const validation = action_validator.ValidationResult{
             .is_valid = true,
@@ -667,14 +666,14 @@ pub const TerminalUI = struct {
             var hole_cards_u32: [2]u32 = undefined;
             hole_cards_u32[0] = @intCast(player_ptr.hole_cards[0]);
             hole_cards_u32[1] = @intCast(player_ptr.hole_cards[1]);
-            
+
             // Convert board cards
             var board_cards: [5]u32 = undefined;
             const board_size = game.betting_stage.boardSize();
             for (0..board_size) |i| {
                 board_cards[i] = @intCast(game.board[i]);
             }
-            
+
             const rank = evaluator.evaluate(hole_cards_u32, board_cards[0..board_size]);
             const hand_type = hand_eval.HandEvaluator.getHandType(rank);
             const hand_name = hand_eval.HandEvaluator.handTypeToString(hand_type);
@@ -714,7 +713,7 @@ pub const TerminalUI = struct {
             y += 1;
             self.moveCursor(y, center_x - 25);
             // TODO: Implement card display with ascii_cards.renderMultipleCards
-            std.debug.print("Cards: {d} {d}", .{hand.player.hole_cards[0], hand.player.hole_cards[1]});
+            std.debug.print("Cards: {d} {d}", .{ hand.player.hole_cards[0], hand.player.hole_cards[1] });
             y += 2;
         }
 
@@ -806,7 +805,7 @@ pub const TerminalUI = struct {
 
         self.moveCursor(y, center_x - 15);
         std.debug.print("Press Enter to return to main menu...", .{});
-        
+
         // Flush output to ensure everything is displayed
         std.io.getStdOut().writer().writeAll("") catch {};
 
@@ -822,7 +821,7 @@ pub const TerminalUI = struct {
                 break;
             }
         }
-        
+
         // Redraw the main menu when returning
         // No need - the main menu loop will handle this
     }
@@ -1133,7 +1132,7 @@ pub const TerminalUI = struct {
 
         const ai_name = switch (ai_type) {
             .ai_weak => "Weak AI",
-            .ai_medium => "Medium AI", 
+            .ai_medium => "Medium AI",
             .ai_strong => "Strong AI",
             else => "AI",
         };
@@ -1161,7 +1160,7 @@ pub const TerminalUI = struct {
                 break :blk game_engine.Action.allIn(current_player.id, all_in_amount);
             },
         };
-        
+
         try game.applyAction(game_action);
 
         // Add to action history
@@ -1169,7 +1168,7 @@ pub const TerminalUI = struct {
             .player_name = try std.fmt.allocPrint(self.allocator, "Player {d}", .{current_player.id}),
             .action = switch (action) {
                 .fold => "fold",
-                .call => "call", 
+                .call => "call",
                 .raise => "raise",
                 .check => "check",
                 .all_in => "all_in",

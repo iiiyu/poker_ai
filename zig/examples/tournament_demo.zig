@@ -87,11 +87,11 @@ fn singleHeadsUpDemo(allocator: std.mem.Allocator) !void {
     std.debug.print("\nTournament Progress:\n", .{});
     for (0..10) |hand_num| {
         if (tournament.isComplete()) break;
-        
+
         std.debug.print("  Hand {}: ", .{hand_num + 1});
         const current_blinds = tournament.blind_schedule.getCurrentBlinds();
         std.debug.print("Blinds {}/{} ", .{ current_blinds.small_blind, current_blinds.big_blind });
-        
+
         // In a real implementation, this would run the actual hand
         // For demo purposes, we'll just advance the tournament state
         tournament.advanceHand();
@@ -175,14 +175,14 @@ fn parallelHeadsUpDemo(allocator: std.mem.Allocator) !void {
     // Create parallel tournament configuration
     var config = try TournamentConfigurations.headsUpConfig(
         allocator,
-        100,  // 100 tournaments
-        4,    // 4 worker threads
-        1,    // Player 1 ID
-        2,    // Player 2 ID
+        100, // 100 tournaments
+        4, // 4 worker threads
+        1, // Player 1 ID
+        2, // Player 2 ID
         1500.0, // Player 1 ELO
         1600.0, // Player 2 ELO
     );
-    
+
     defer {
         allocator.free(config.blind_levels);
         allocator.free(config.payout_positions);
@@ -193,27 +193,27 @@ fn parallelHeadsUpDemo(allocator: std.mem.Allocator) !void {
 
     // Note: In a real implementation, this would actually run the tournaments
     // For demo purposes, we'll show the configuration and expected results
-    
+
     std.debug.print("Configuration:\n", .{});
     std.debug.print("  Tournament Format: {s}\n", .{config.format.toString()});
     std.debug.print("  Number of Tournaments: {}\n", .{config.num_tournaments});
     std.debug.print("  Worker Threads: {}\n", .{config.num_worker_threads});
     std.debug.print("  Starting Stack: {} chips\n", .{config.initial_stack});
-    
+
     std.debug.print("\nPlayer Setup:\n", .{});
     for (config.player_ids, config.initial_elo_ratings) |player_id, elo| {
         std.debug.print("  Player {}: ELO {d:.0}\n", .{ player_id, elo });
     }
-    
+
     // Simulate execution statistics
     const estimated_time_ms = config.num_tournaments * 50; // Rough estimate
-    const estimated_hands = config.num_tournaments * 25;  // Average hands per HU tournament
-    
+    const estimated_hands = config.num_tournaments * 25; // Average hands per HU tournament
+
     std.debug.print("\nEstimated Performance:\n", .{});
     std.debug.print("  Total Hands Simulated: ~{}\n", .{estimated_hands});
     std.debug.print("  Estimated Execution Time: ~{}ms\n", .{estimated_time_ms});
     std.debug.print("  Hands per Second: ~{d:.0}\n", .{@as(f64, @floatFromInt(estimated_hands)) / (@as(f64, @floatFromInt(estimated_time_ms)) / 1000.0)});
-    
+
     std.debug.print("\nExpected Results Format:\n", .{});
     std.debug.print("  - Win rates for each player\n", .{});
     std.debug.print("  - ELO rating changes\n", .{});

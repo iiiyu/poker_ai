@@ -24,11 +24,11 @@ pub const Card = game_engine.Card;
 
 /// Tournament format types
 pub const TournamentFormat = enum(u8) {
-    cash_game,      // Fixed blinds, unlimited rebuys
-    freezeout,      // Elimination tournament with increasing blinds
-    sit_n_go,       // Single table tournament
-    multi_table,    // Multi-table tournament
-    heads_up,       // One-on-one tournament
+    cash_game, // Fixed blinds, unlimited rebuys
+    freezeout, // Elimination tournament with increasing blinds
+    sit_n_go, // Single table tournament
+    multi_table, // Multi-table tournament
+    heads_up, // One-on-one tournament
 
     pub fn toString(self: TournamentFormat) []const u8 {
         return switch (self) {
@@ -91,7 +91,7 @@ pub const BlindSchedule = struct {
 
     pub fn advanceHand(self: *Self) void {
         self.hands_at_current_level += 1;
-        
+
         if (self.current_level < self.levels.len) {
             const current_blinds = self.levels[self.current_level];
             if (self.hands_at_current_level >= current_blinds.duration_hands) {
@@ -140,7 +140,7 @@ pub const PlayerStats = struct {
             self.hands_won += 1;
         }
         self.chips_won += chips_change;
-        
+
         // Update final stack (assuming it tracks current stack)
         if (chips_change > 0) {
             self.final_stack += @intCast(chips_change);
@@ -205,7 +205,7 @@ pub const HandRecord = struct {
         self.winner_id = winner_id;
         self.pot_size = pot_size;
         self.showdown_occurred = showdown;
-        
+
         // Copy board cards
         for (board, 0..) |card, i| {
             if (i < self.board_cards.len) {
@@ -227,10 +227,10 @@ pub const PayoutStructure = struct {
         if (positions.len != percentages.len) {
             return error.MismatchedPayoutArrays;
         }
-        
+
         const owned_positions = try allocator.dupe(u32, positions);
         const owned_percentages = try allocator.dupe(f64, percentages);
-        
+
         return Self{
             .positions = owned_positions,
             .percentages = owned_percentages,
@@ -307,17 +307,17 @@ pub const Tournament = struct {
     initial_stack: ChipAmount,
     blind_schedule: BlindSchedule,
     payout_structure: ?PayoutStructure,
-    
+
     // State
     players: std.ArrayList(player.Player),
     eliminated_players: std.ArrayList(PlayerId),
     current_hand: u32,
     total_prize_pool: ChipAmount,
-    
+
     // Statistics and history
     player_stats: std.HashMap(PlayerId, PlayerStats, std.hash_map.AutoContext(PlayerId), 80),
     hand_history: std.ArrayList(HandRecord),
-    
+
     // Utilities
     allocator: std.mem.Allocator,
     rng: std.Random,
@@ -360,7 +360,7 @@ pub const Tournament = struct {
         self.players.deinit();
         self.eliminated_players.deinit();
         self.player_stats.deinit();
-        
+
         // Clean up hand history
         for (self.hand_history.items) |*record| {
             record.deinit();
@@ -376,10 +376,10 @@ pub const Tournament = struct {
 
         const new_player = player.Player.init(player_id, self.initial_stack);
         try self.players.append(new_player);
-        
+
         const stats = PlayerStats.init(player_id, self.initial_stack, elo_rating);
         try self.player_stats.put(player_id, stats);
-        
+
         self.total_prize_pool += self.initial_stack;
     }
 
@@ -406,7 +406,7 @@ pub const Tournament = struct {
                 active_count += 1;
             }
         }
-        
+
         // This is a simplified implementation
         // In practice, you'd want to maintain a separate active players list
         return self.players.items[0..active_count];
@@ -416,7 +416,7 @@ pub const Tournament = struct {
     pub fn advanceHand(self: *Self) void {
         self.current_hand += 1;
         self.blind_schedule.advanceHand();
-        
+
         // Handle blind level changes
         if (self.blind_schedule.shouldAdvanceLevel()) {
             // Log blind level advancement if needed
@@ -433,7 +433,7 @@ pub const Tournament = struct {
         // Create hand record
         var active_player_ids = try self.allocator.alloc(PlayerId, active_players.len);
         defer self.allocator.free(active_player_ids);
-        
+
         for (active_players, 0..) |p, i| {
             active_player_ids[i] = p.id;
         }
@@ -471,10 +471,10 @@ pub const Tournament = struct {
         while (stats_iter.next()) |entry| {
             const player_id = entry.key_ptr.*;
             const stats = entry.value_ptr;
-            
+
             const won_hand = (player_id == winner_id);
             const chips_change: i64 = if (won_hand) @as(i64, @intCast(pot_size)) else 0;
-            
+
             stats.updateHandResult(chips_change, won_hand);
         }
     }
@@ -488,16 +488,16 @@ pub const Tournament = struct {
         // Calculate payouts if payout structure exists
         if (self.payout_structure) |payout| {
             var position: u32 = 1;
-            
+
             // Award payouts based on finishing position
             for (self.eliminated_players.items) |player_id| {
                 const payout_amount = payout.getPayoutForPosition(position, self.total_prize_pool);
-                
+
                 if (self.player_stats.getPtr(player_id)) |stats| {
                     stats.chips_won += @as(i64, @intCast(payout_amount));
                     stats.elimination_position = position;
                 }
-                
+
                 position += 1;
             }
         }
@@ -511,7 +511,7 @@ pub const Tournament = struct {
         const player_count = self.player_stats.count();
         var ratings = try self.allocator.alloc(f64, player_count);
         defer self.allocator.free(ratings);
-        
+
         var results = try self.allocator.alloc(f64, player_count);
         defer self.allocator.free(results);
 

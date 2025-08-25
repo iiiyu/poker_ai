@@ -84,18 +84,18 @@ pub const PokerError = error{
 
 test "library initialization" {
     const testing = std.testing;
-    
+
     // Test basic initialization
     init(testing.allocator);
     defer deinit();
-    
+
     // Verify allocator is set
     try testing.expect(allocator.ptr != undefined);
 }
 
 test "version check" {
     const testing = std.testing;
-    
+
     try testing.expect(version.major == 0);
     try testing.expect(version.minor == 1);
     try testing.expect(version.patch == 0);

@@ -44,10 +44,10 @@ pub const CardOps = struct {
     pub fn fromString(comptime str: []const u8) Card {
         comptime {
             if (str.len != 2) @compileError("Card string must be exactly 2 characters");
-            
+
             const rank_char = str[0];
             const suit_char = str[1];
-            
+
             // Convert rank character to rank integer
             const rank_int = blk: {
                 for (STR_RANKS, 0..) |r, i| {
@@ -55,7 +55,7 @@ pub const CardOps = struct {
                 }
                 @compileError("Invalid rank character: " ++ [1]u8{rank_char});
             };
-            
+
             // Convert suit character to suit integer
             const suit_int = switch (suit_char) {
                 's' => SUIT_SPADES,
@@ -64,28 +64,28 @@ pub const CardOps = struct {
                 'c' => SUIT_CLUBS,
                 else => @compileError("Invalid suit character: " ++ [1]u8{suit_char}),
             };
-            
+
             const rank_prime = PRIMES[rank_int];
             const bitrank: u32 = @as(u32, 1) << @intCast(rank_int + 16);
             const suit = suit_int << 12;
             const rank = rank_int << 8;
-            
+
             return bitrank | suit | rank | rank_prime;
         }
     }
-    
+
     /// Create a card from string representation at runtime
     pub fn fromStringRuntime(str: []const u8) !Card {
         if (str.len != 2) return error.InvalidCardString;
-        
+
         const rank_char = str[0];
         const suit_char = str[1];
-        
+
         // Convert rank character to rank integer
         const rank_int: u32 = for (STR_RANKS, 0..) |r, i| {
             if (r == rank_char) break @intCast(i);
         } else return error.InvalidRank;
-        
+
         // Convert suit character to suit integer
         const suit_int: u32 = switch (suit_char) {
             's' => SUIT_SPADES,
@@ -94,35 +94,35 @@ pub const CardOps = struct {
             'c' => SUIT_CLUBS,
             else => return error.InvalidSuit,
         };
-        
+
         const rank_prime = PRIMES[rank_int];
         const bitrank: u32 = @as(u32, 1) << @intCast(rank_int + 16);
         const suit = suit_int << 12;
         const rank = rank_int << 8;
-        
+
         return bitrank | suit | rank | rank_prime;
     }
-    
+
     /// Extract rank integer from card (0-12, where 0=2, 12=A)
     pub inline fn getRank(card: Card) u8 {
         return @intCast((card >> 8) & 0xF);
     }
-    
+
     /// Extract suit integer from card
     pub inline fn getSuit(card: Card) u8 {
         return @intCast((card >> 12) & 0xF);
     }
-    
+
     /// Extract bitrank from card (used for flush detection)
     pub inline fn getBitrank(card: Card) u32 {
         return (card >> 16) & 0x1FFF;
     }
-    
+
     /// Extract prime number from card
     pub inline fn getPrime(card: Card) u8 {
         return @intCast(card & 0x3F);
     }
-    
+
     /// Calculate prime product from a hand of cards
     pub fn primeProductFromHand(cards: []const Card) u64 {
         var product: u64 = 1;
@@ -131,7 +131,7 @@ pub const CardOps = struct {
         }
         return product;
     }
-    
+
     /// Calculate prime product from rankbits (for flush evaluation)
     pub fn primeProductFromRankbits(rankbits: u32) u64 {
         var product: u64 = 1;
@@ -162,7 +162,7 @@ pub fn getHandType(rank: HandRank) HandType {
 pub fn handTypeToString(hand_type: HandType) []const u8 {
     return switch (hand_type) {
         .straight_flush => "Straight Flush",
-        .four_of_a_kind => "Four of a Kind", 
+        .four_of_a_kind => "Four of a Kind",
         .full_house => "Full House",
         .flush => "Flush",
         .straight => "Straight",
@@ -176,7 +176,7 @@ pub fn handTypeToString(hand_type: HandType) []const u8 {
 // Export compile-time constants for testing
 pub const TEST_CARDS = struct {
     pub const ACE_SPADES = CardOps.fromString("As");
-    pub const KING_SPADES = CardOps.fromString("Ks"); 
+    pub const KING_SPADES = CardOps.fromString("Ks");
     pub const QUEEN_SPADES = CardOps.fromString("Qs");
     pub const JACK_SPADES = CardOps.fromString("Js");
     pub const TEN_SPADES = CardOps.fromString("Ts");
@@ -187,13 +187,13 @@ pub const TEST_CARDS = struct {
 // Basic tests to ensure correctness
 test "card creation and extraction" {
     const ace_spades = comptime CardOps.fromString("As");
-    
+
     // Test rank extraction (Ace = 12)
     try std.testing.expect(CardOps.getRank(ace_spades) == 12);
-    
+
     // Test suit extraction (Spades = 1)
     try std.testing.expect(CardOps.getSuit(ace_spades) == SUIT_SPADES);
-    
+
     // Test prime extraction (Ace prime = 41)
     try std.testing.expect(CardOps.getPrime(ace_spades) == 41);
 }
@@ -201,7 +201,7 @@ test "card creation and extraction" {
 test "runtime card creation" {
     const ace_spades = try CardOps.fromStringRuntime("As");
     const comptime_ace = comptime CardOps.fromString("As");
-    
+
     // Should match compile-time version
     try std.testing.expect(ace_spades == comptime_ace);
 }
@@ -209,13 +209,13 @@ test "runtime card creation" {
 test "prime product calculation" {
     const cards = [3]Card{
         comptime CardOps.fromString("As"), // Prime 41
-        comptime CardOps.fromString("Ks"), // Prime 37  
+        comptime CardOps.fromString("Ks"), // Prime 37
         comptime CardOps.fromString("Qs"), // Prime 31
     };
-    
+
     const product = CardOps.primeProductFromHand(&cards);
     const expected = @as(u64, 41) * 37 * 31;
-    
+
     try std.testing.expect(product == expected);
 }
 
@@ -229,13 +229,13 @@ test "hand type classification" {
 test "card bit representation validation" {
     // Test that our cards have the same bit representation as Python
     const ace_spades = comptime CardOps.fromString("As");
-    
+
     // From Python: Ace of spades = 0x10001C29 = 268442665
     // Let's verify the components are correct
     try std.testing.expect(CardOps.getRank(ace_spades) == 12);
     try std.testing.expect(CardOps.getSuit(ace_spades) == 1);
     try std.testing.expect(CardOps.getPrime(ace_spades) == 41);
-    
+
     // The full card value should match Python's calculation
     std.debug.print("Ace of spades: 0x{X:0>8} ({})\n", .{ ace_spades, ace_spades });
 }
@@ -255,7 +255,7 @@ test "python compatibility - card values" {
         .{ .str = "7h", .expected_rank = 5, .expected_suit = 2, .expected_prime = 13 },
         .{ .str = "9d", .expected_rank = 7, .expected_suit = 4, .expected_prime = 19 },
     };
-    
+
     for (test_cards) |test_card| {
         const card = try CardOps.fromStringRuntime(test_card.str);
         try std.testing.expect(CardOps.getRank(card) == test_card.expected_rank);

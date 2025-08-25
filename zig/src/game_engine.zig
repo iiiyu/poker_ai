@@ -1,8 +1,8 @@
 //! Texas Hold'em Game Engine
-//! 
+//!
 //! High-performance, memory-efficient implementation of Texas Hold'em poker rules
 //! Compatible with Python implementation for MCCFR training
-//! 
+//!
 //! Key features:
 //! - Zero heap allocations in hot paths
 //! - Stack-based state representation
@@ -89,43 +89,23 @@ pub const Action = struct {
     player_id: PlayerId,
 
     pub fn fold(player_id: PlayerId) Action {
-        return Action{ 
-            .action_type = .fold, 
-            .amount = 0, 
-            .player_id = player_id 
-        };
+        return Action{ .action_type = .fold, .amount = 0, .player_id = player_id };
     }
 
     pub fn call(player_id: PlayerId) Action {
-        return Action{ 
-            .action_type = .call, 
-            .amount = 0, 
-            .player_id = player_id 
-        };
+        return Action{ .action_type = .call, .amount = 0, .player_id = player_id };
     }
 
     pub fn check(player_id: PlayerId) Action {
-        return Action{ 
-            .action_type = .check, 
-            .amount = 0, 
-            .player_id = player_id 
-        };
+        return Action{ .action_type = .check, .amount = 0, .player_id = player_id };
     }
 
     pub fn raise(player_id: PlayerId, amount: ChipAmount) Action {
-        return Action{ 
-            .action_type = .raise, 
-            .amount = amount, 
-            .player_id = player_id 
-        };
+        return Action{ .action_type = .raise, .amount = amount, .player_id = player_id };
     }
 
     pub fn allIn(player_id: PlayerId, amount: ChipAmount) Action {
-        return Action{ 
-            .action_type = .all_in, 
-            .amount = amount, 
-            .player_id = player_id 
-        };
+        return Action{ .action_type = .all_in, .amount = amount, .player_id = player_id };
     }
 
     pub fn isAggressive(self: Action) bool {
@@ -160,46 +140,42 @@ pub const TexasHoldemGameEngine = struct {
     players: [MAX_PLAYERS]player.Player,
     num_players: u8,
     active_players: u8,
-    
+
     // Table state
     board: [5]Card,
     board_size: u8,
     betting_stage: BettingStage,
-    
+
     // Betting state
     current_player_index: u8,
     dealer_button: PlayerId,
     small_blind_position: PlayerId,
     big_blind_position: PlayerId,
-    
+
     // Pot management
     pot_manager: pot.PotManager,
-    
+
     // Betting round management
     betting_manager: betting.BettingManager,
-    
+
     // Action validation
     action_validator: action_validator.ActionValidator,
-    
+
     // Game configuration
     config: GameConfig,
-    
+
     // Action history for information sets
     action_history: std.ArrayList(Action),
-    
+
     // State flags
     is_terminal: bool,
-    
+
     allocator: std.mem.Allocator,
-    
+
     const Self = @This();
 
     /// Initialize a new Texas Hold'em game
-    pub fn init(
-        allocator: std.mem.Allocator, 
-        num_players: u8, 
-        config: GameConfig
-    ) !Self {
+    pub fn init(allocator: std.mem.Allocator, num_players: u8, config: GameConfig) !Self {
         if (num_players < MIN_PLAYERS or num_players > MAX_PLAYERS) {
             return error.InvalidPlayerCount;
         }
@@ -271,7 +247,7 @@ pub const TexasHoldemGameEngine = struct {
 
         // Rotate dealer button
         self.dealer_button = (self.dealer_button + 1) % self.num_players;
-        
+
         // Update blind positions
         if (self.num_players == 2) {
             self.small_blind_position = self.dealer_button;
@@ -286,13 +262,9 @@ pub const TexasHoldemGameEngine = struct {
 
         // Set first to act for preflop
         self.current_player_index = self.nextActivePlayer(self.big_blind_position);
-        
+
         // Initialize betting round
-        try self.betting_manager.startRound(
-            self.players[0..self.num_players], 
-            self.current_player_index,
-            self.config.big_blind
-        );
+        try self.betting_manager.startRound(self.players[0..self.num_players], self.current_player_index, self.config.big_blind);
     }
 
     /// Deal hole cards to all players
@@ -337,7 +309,7 @@ pub const TexasHoldemGameEngine = struct {
             .amount = action.amount,
             .player_id = action.player_id,
         };
-        
+
         // Convert GameConfig for validation
         const validator_config = action_validator.GameConfig{
             .small_blind = self.config.small_blind,
@@ -349,15 +321,9 @@ pub const TexasHoldemGameEngine = struct {
             .min_bet_multiplier = 2.0,
             .is_tournament = false,
         };
-        
+
         // Validate action
-        const validation_result = self.action_validator.validateAction(
-            validation_action,
-            &self.players[action.player_id],
-            self.players[0..self.num_players],
-            &self.betting_manager,
-            validator_config
-        );
+        const validation_result = self.action_validator.validateAction(validation_action, &self.players[action.player_id], self.players[0..self.num_players], &self.betting_manager, validator_config);
 
         if (!validation_result.is_valid) {
             return error.InvalidAction;
@@ -381,7 +347,7 @@ pub const TexasHoldemGameEngine = struct {
                 const total_bet = action.amount;
                 const current_bet = self.players[action.player_id].current_bet;
                 const additional = total_bet - current_bet;
-                
+
                 try self.players[action.player_id].bet(additional);
                 try self.pot_manager.addToPot(additional, action.player_id);
                 self.betting_manager.registerRaise(action.player_id, total_bet);
@@ -390,7 +356,7 @@ pub const TexasHoldemGameEngine = struct {
                 const all_in_amount = self.players[action.player_id].stack;
                 try self.players[action.player_id].bet(all_in_amount);
                 try self.pot_manager.addToPot(all_in_amount, action.player_id);
-                
+
                 const total_bet = self.players[action.player_id].current_bet;
                 if (total_bet > self.betting_manager.current_bet) {
                     self.betting_manager.registerRaise(action.player_id, total_bet);
@@ -401,7 +367,7 @@ pub const TexasHoldemGameEngine = struct {
         // Record action in history
         try self.action_history.append(action);
 
-        // Update betting manager  
+        // Update betting manager
         self.betting_manager.recordAction(.{
             .action_type = @intFromEnum(action.action_type),
             .player_id = action.player_id,
@@ -423,7 +389,7 @@ pub const TexasHoldemGameEngine = struct {
     /// Get legal actions for current player
     pub fn getLegalActions(self: Self) ![]ActionType {
         const current_player = &self.players[self.current_player_index];
-        
+
         // Convert GameConfig to ActionValidator's GameConfig
         const validator_config = action_validator.GameConfig{
             .small_blind = self.config.small_blind,
@@ -435,23 +401,18 @@ pub const TexasHoldemGameEngine = struct {
             .min_bet_multiplier = 2.0,
             .is_tournament = false,
         };
-        
-        const validator_actions = try self.action_validator.getLegalActions(
-            current_player,
-            self.players[0..self.num_players],
-            &self.betting_manager,
-            validator_config
-        );
-        
+
+        const validator_actions = try self.action_validator.getLegalActions(current_player, self.players[0..self.num_players], &self.betting_manager, validator_config);
+
         // Convert ActionValidator.ActionType to game_engine.ActionType
         const converted_actions = try self.allocator.alloc(ActionType, validator_actions.len);
         for (validator_actions, 0..) |validator_action, i| {
             converted_actions[i] = @enumFromInt(@intFromEnum(validator_action));
         }
-        
+
         // We must defer the deallocation of validator_actions
         defer self.allocator.free(validator_actions);
-        
+
         return converted_actions;
     }
 
@@ -534,7 +495,7 @@ pub const TexasHoldemGameEngine = struct {
     fn advanceToNextStage(self: *Self) !void {
         if (self.betting_stage.next()) |next_stage| {
             self.betting_stage = next_stage;
-            
+
             // Reset betting for new round
             for (self.players[0..self.num_players]) |*p| {
                 p.resetBetting();
@@ -542,10 +503,7 @@ pub const TexasHoldemGameEngine = struct {
 
             // Start new betting round
             self.current_player_index = self.nextActivePlayer(self.dealer_button);
-            try self.betting_manager.startRound(
-                self.players[0..self.num_players], 
-                self.current_player_index, 
-                0 // No forced bet except blinds
+            try self.betting_manager.startRound(self.players[0..self.num_players], self.current_player_index, 0 // No forced bet except blinds
             );
         } else {
             self.is_terminal = true;
@@ -555,7 +513,7 @@ pub const TexasHoldemGameEngine = struct {
     fn nextActivePlayer(self: Self, start: PlayerId) PlayerId {
         var next = (start + 1) % self.num_players;
         var count: u8 = 0;
-        
+
         while (count < self.num_players) {
             if (self.players[next].is_active and self.players[next].canAct()) {
                 return next;
@@ -563,7 +521,7 @@ pub const TexasHoldemGameEngine = struct {
             next = (next + 1) % self.num_players;
             count += 1;
         }
-        
+
         return start; // Fallback to start position
     }
 
@@ -580,16 +538,16 @@ pub const TexasHoldemGameEngine = struct {
 // Unit tests
 test "game engine initialization" {
     const testing = std.testing;
-    
+
     const config = GameConfig{
         .small_blind = 5,
         .big_blind = 10,
         .initial_stack = 1000,
     };
-    
+
     var engine = try TexasHoldemGameEngine.init(testing.allocator, 6, config);
     defer engine.deinit();
-    
+
     try testing.expectEqual(@as(u8, 6), engine.num_players);
     try testing.expectEqual(BettingStage.pre_flop, engine.betting_stage);
     try testing.expectEqual(@as(u32, 5), engine.config.small_blind);
@@ -598,12 +556,12 @@ test "game engine initialization" {
 
 test "action creation and validation" {
     const testing = std.testing;
-    
+
     const fold_action = Action.fold(0);
     try testing.expectEqual(ActionType.fold, fold_action.action_type);
     try testing.expectEqual(@as(u32, 0), fold_action.amount);
     try testing.expectEqual(@as(u8, 0), fold_action.player_id);
-    
+
     const raise_action = Action.raise(1, 100);
     try testing.expectEqual(ActionType.raise, raise_action.action_type);
     try testing.expectEqual(@as(u32, 100), raise_action.amount);
@@ -612,7 +570,7 @@ test "action creation and validation" {
 
 test "betting stage progression" {
     const testing = std.testing;
-    
+
     try testing.expectEqual(BettingStage.flop, BettingStage.pre_flop.next().?);
     try testing.expectEqual(BettingStage.turn, BettingStage.flop.next().?);
     try testing.expectEqual(BettingStage.river, BettingStage.turn.next().?);

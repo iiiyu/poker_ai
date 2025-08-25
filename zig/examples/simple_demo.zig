@@ -25,21 +25,16 @@ pub fn main() !void {
 
     print("Hand: As Ks Qs Js Ts (Royal Flush)\n", .{});
     for (royal_flush_cards) |card| {
-        print("  Card: 0x{X:0>8} | Rank: {d:2} | Suit: {d} | Prime: {d:2}\n", .{
-            card,
-            CardOps.getRank(card),
-            CardOps.getSuit(card), 
-            CardOps.getPrime(card)
-        });
+        print("  Card: 0x{X:0>8} | Rank: {d:2} | Suit: {d} | Prime: {d:2}\n", .{ card, CardOps.getRank(card), CardOps.getSuit(card), CardOps.getPrime(card) });
     }
 
     // Demo 2: Prime product calculation
     print("\n🎯 Demo 2: Prime Product Calculation\n", .{});
     print("------------------------------------\n", .{});
-    
+
     const product = CardOps.primeProductFromHand(&royal_flush_cards);
     const expected = @as(u64, 41) * 37 * 31 * 29 * 23; // A, K, Q, J, T primes
-    
+
     print("Prime product: {d}\n", .{product});
     print("Expected:      {d}\n", .{expected});
     print("Match: {}\n", .{product == expected});
@@ -73,20 +68,14 @@ pub fn main() !void {
     print("--------------------------------\n");
 
     const card_strings = [_][]const u8{ "As", "Kh", "Qd", "Jc", "Ts", "2c", "7h", "9d" };
-    
+
     print("Creating cards at runtime:\n");
     for (card_strings) |card_str| {
         const card = CardOps.fromStringRuntime(card_str) catch |err| {
             print("Error creating card {s}: {}\n", .{ card_str, err });
             continue;
         };
-        print("  {s} -> 0x{X:0>8} | Rank: {d:2} | Suit: {d} | Prime: {d:2}\n", .{
-            card_str,
-            card, 
-            CardOps.getRank(card),
-            CardOps.getSuit(card),
-            CardOps.getPrime(card)
-        });
+        print("  {s} -> 0x{X:0>8} | Rank: {d:2} | Suit: {d} | Prime: {d:2}\n", .{ card_str, card, CardOps.getRank(card), CardOps.getSuit(card), CardOps.getPrime(card) });
     }
 
     // Demo 5: Performance test
@@ -103,13 +92,13 @@ pub fn main() !void {
     };
 
     const start_time = std.time.nanoTimestamp();
-    
+
     var i: u32 = 0;
     var total_product: u64 = 0;
     while (i < ITERATIONS) : (i += 1) {
         total_product += CardOps.primeProductFromHand(&test_hand);
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const total_ns = @as(u64, @intCast(end_time - start_time));
     const avg_ns = total_ns / ITERATIONS;
@@ -122,7 +111,7 @@ pub fn main() !void {
     print("\n✨ Basic demo complete!\n");
     print("\n📝 Next Steps:\n");
     print("   1. Implement lookup table generation\n");
-    print("   2. Add full hand evaluation\n"); 
+    print("   2. Add full hand evaluation\n");
     print("   3. Add SIMD batch processing\n");
     print("   4. Validate against Python implementation\n");
 }

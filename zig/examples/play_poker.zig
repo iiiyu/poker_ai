@@ -3,7 +3,7 @@
 //! Main entry point for playing poker against AI opponents
 //! Features:
 //! - Interactive terminal UI with full gameplay
-//! - Multiple AI difficulty levels 
+//! - Multiple AI difficulty levels
 //! - Customizable game settings
 //! - Statistics tracking
 //! - Settings persistence
@@ -35,7 +35,7 @@ fn printWelcomeBanner() void {
         \\                        Version 0.1.0
         \\
     ;
-    
+
     std.debug.print("{s}{s}{s}\n", .{ Colors.WHITE, banner, Colors.RESET });
 }
 
@@ -66,10 +66,10 @@ fn printUsage(program_name: []const u8) void {
 fn createDefaultConfig(allocator: std.mem.Allocator) !cli_parser.Config {
     const num_players: u8 = 3;
     const starting_stack: u32 = 1000;
-    
+
     // Allocate players array
     var players = try allocator.alloc(cli_parser.PlayerConfig, num_players);
-    
+
     // Configure players: Human player + AI opponents
     // Note: Using string literals for names - no allocation needed
     players[0] = cli_parser.PlayerConfig{
@@ -77,7 +77,7 @@ fn createDefaultConfig(allocator: std.mem.Allocator) !cli_parser.Config {
         .name = "Human",
         .stack_size = starting_stack,
     };
-    
+
     for (1..num_players) |i| {
         players[i] = cli_parser.PlayerConfig{
             .type = .ai_medium,
@@ -85,7 +85,7 @@ fn createDefaultConfig(allocator: std.mem.Allocator) !cli_parser.Config {
             .stack_size = starting_stack,
         };
     }
-    
+
     // Create config without calling Config.default()
     return cli_parser.Config{
         .game_mode = .play,
@@ -112,11 +112,11 @@ fn createDefaultConfig(allocator: std.mem.Allocator) !cli_parser.Config {
 fn parseCommandLineArgs(allocator: std.mem.Allocator) !?cli_parser.Config {
     var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
-    
+
     const program_name = args.next() orelse "play_poker";
-    
+
     var config = try createDefaultConfig(allocator);
-    
+
     // Parse command line arguments
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
@@ -138,24 +138,24 @@ fn parseCommandLineArgs(allocator: std.mem.Allocator) !?cli_parser.Config {
                 std.debug.print("Error: Player count must be between 2 and 6\n", .{});
                 return error.InvalidPlayerCount;
             }
-            
+
             // If player count changed, reallocate players array
             if (new_player_count != config.num_players) {
                 // Free old players array (no need to free names since they're string literals)
                 allocator.free(config.players);
-                
+
                 config.num_players = new_player_count;
-                
+
                 // Allocate new players array
                 config.players = try allocator.alloc(cli_parser.PlayerConfig, config.num_players);
-                
+
                 // Re-initialize players with string literal names
                 config.players[0] = cli_parser.PlayerConfig{
                     .type = .human,
                     .name = "Human",
                     .stack_size = config.starting_stack,
                 };
-                
+
                 // Use static AI names
                 const ai_names = [_][]const u8{ "AI 1", "AI 2", "AI 3", "AI 4", "AI 5" };
                 for (1..config.num_players) |i| {
@@ -234,7 +234,7 @@ fn parseCommandLineArgs(allocator: std.mem.Allocator) !?cli_parser.Config {
                 std.debug.print("Error: --difficulty requires a value\n", .{});
                 return error.MissingArgument;
             };
-            
+
             const ai_type: cli_parser.PlayerType = if (std.mem.eql(u8, value, "weak"))
                 .ai_weak
             else if (std.mem.eql(u8, value, "medium"))
@@ -247,7 +247,7 @@ fn parseCommandLineArgs(allocator: std.mem.Allocator) !?cli_parser.Config {
                 std.debug.print("Error: Invalid difficulty '{s}'. Use weak/medium/strong/expert\n", .{value});
                 return error.InvalidPlayerType;
             };
-            
+
             // Update AI players with new type
             for (1..config.num_players) |i| {
                 if (i < config.players.len) {
@@ -260,18 +260,18 @@ fn parseCommandLineArgs(allocator: std.mem.Allocator) !?cli_parser.Config {
             return error.UnknownArgument;
         }
     }
-    
+
     // Validation
     if (config.big_blind <= config.small_blind) {
         std.debug.print("Error: Big blind must be greater than small blind\n", .{});
         return error.InvalidBlindStructure;
     }
-    
+
     if (config.starting_stack < config.big_blind * 20) {
         std.debug.print("Warning: Starting stack is very small compared to blinds\n", .{});
         std.debug.print("Recommended minimum: {d} chips\n", .{config.big_blind * 20});
     }
-    
+
     return config;
 }
 
@@ -280,7 +280,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-    
+
     // Parse command line arguments
     const config = parseCommandLineArgs(allocator) catch {
         std.process.exit(1);
@@ -288,17 +288,17 @@ pub fn main() !void {
         // Help or version was displayed
         return;
     };
-    
+
     // TODO: Fix memory management - defer config.deinit(allocator) causes segfault
     // defer config.deinit(allocator);
-    
+
     // Print welcome banner
     if (!config.no_color) {
         printWelcomeBanner();
     } else {
         std.debug.print("\nPoker AI - Texas Hold'em Terminal Interface v0.1.0\n\n", .{});
     }
-    
+
     // Display game configuration
     std.debug.print("Game Configuration:\n", .{});
     std.debug.print("  Players: {d} ({d} AI opponents + You)\n", .{ config.num_players, config.num_players - 1 });
@@ -312,7 +312,7 @@ pub fn main() !void {
     std.debug.print("  AI Difficulty: {s}\n", .{@tagName(config.players[1].type)});
     std.debug.print("  Display Mode: {s}\n", .{@tagName(config.display_mode)});
     std.debug.print("\n", .{});
-    
+
     // Instructions
     if (!config.no_color) {
         std.debug.print("{s}Instructions:{s}\n", .{ Colors.BOLD, Colors.RESET });
@@ -328,10 +328,10 @@ pub fn main() !void {
         std.debug.print("  • Use +/- to adjust raise amounts\n", .{});
     }
     std.debug.print("\nStarting game...\n", .{});
-    
+
     // Start the terminal UI
     try terminal_ui.runTerminalUI(allocator, config);
-    
+
     // Farewell message
     if (!config.no_color) {
         std.debug.print("\n{s}Thanks for playing Poker AI!{s}\n", .{ Colors.WHITE, Colors.RESET });
@@ -343,11 +343,11 @@ pub fn main() !void {
 // Unit tests
 test "argument parsing" {
     const testing = std.testing;
-    
+
     // Test basic functionality (without actual args parsing)
     var config = try createDefaultConfig(testing.allocator);
     defer config.deinit(testing.allocator);
-    
+
     try testing.expectEqual(@as(u8, 3), config.num_players);
     try testing.expectEqual(@as(u32, 1000), config.starting_stack);
     try testing.expectEqual(cli_parser.GameMode.play, config.game_mode);
@@ -357,10 +357,10 @@ test "argument parsing" {
 
 test "config validation" {
     const testing = std.testing;
-    
+
     var config = try createDefaultConfig(testing.allocator);
     defer config.deinit(testing.allocator);
-    
+
     // Valid configuration should not cause issues
     try testing.expect(config.big_blind > config.small_blind);
     try testing.expect(config.starting_stack > config.big_blind);

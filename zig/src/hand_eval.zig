@@ -51,10 +51,10 @@ pub const CardOps = struct {
     /// Create a card from string representation (e.g., "As", "2h", "Kd", "Tc")
     pub fn fromString(comptime str: []const u8) Card {
         if (str.len != 2) @compileError("Card string must be exactly 2 characters");
-        
+
         const rank_char = str[0];
         const suit_char = str[1];
-        
+
         // Convert rank character to rank integer
         const rank_int = comptime blk: {
             for (STR_RANKS, 0..) |r, i| {
@@ -62,7 +62,7 @@ pub const CardOps = struct {
             }
             @compileError("Invalid rank character: " ++ [1]u8{rank_char});
         };
-        
+
         // Convert suit character to suit integer
         const suit_int = comptime switch (suit_char) {
             's' => SUIT_SPADES,
@@ -71,27 +71,27 @@ pub const CardOps = struct {
             'c' => SUIT_CLUBS,
             else => @compileError("Invalid suit character: " ++ [1]u8{suit_char}),
         };
-        
+
         const rank_prime = PRIMES[rank_int];
         const bitrank: u32 = @as(u32, 1) << @intCast(rank_int + 16);
         const suit = suit_int << 12;
         const rank = rank_int << 8;
-        
+
         return bitrank | suit | rank | rank_prime;
     }
-    
+
     /// Create a card from string representation at runtime
     pub fn fromStringRuntime(str: []const u8) !Card {
         if (str.len != 2) return error.InvalidCardString;
-        
+
         const rank_char = str[0];
         const suit_char = str[1];
-        
+
         // Convert rank character to rank integer
         const rank_int: u32 = for (STR_RANKS, 0..) |r, i| {
             if (r == rank_char) break @intCast(i);
         } else return error.InvalidRank;
-        
+
         // Convert suit character to suit integer
         const suit_int: u32 = switch (suit_char) {
             's' => SUIT_SPADES,
@@ -100,35 +100,35 @@ pub const CardOps = struct {
             'c' => SUIT_CLUBS,
             else => return error.InvalidSuit,
         };
-        
+
         const rank_prime = PRIMES[rank_int];
         const bitrank: u32 = @as(u32, 1) << @intCast(rank_int + 16);
         const suit = suit_int << 12;
         const rank = rank_int << 8;
-        
+
         return bitrank | suit | rank | rank_prime;
     }
-    
+
     /// Extract rank integer from card (0-12, where 0=2, 12=A)
     pub inline fn getRank(card: Card) u8 {
         return @intCast((card >> 8) & 0xF);
     }
-    
+
     /// Extract suit integer from card
     pub inline fn getSuit(card: Card) u8 {
         return @intCast((card >> 12) & 0xF);
     }
-    
+
     /// Extract bitrank from card (used for flush detection)
     pub inline fn getBitrank(card: Card) u32 {
         return (card >> 16) & 0x1FFF;
     }
-    
+
     /// Extract prime number from card
     pub inline fn getPrime(card: Card) u8 {
         return @intCast(card & 0x3F);
     }
-    
+
     /// Calculate prime product from a hand of cards
     pub fn primeProductFromHand(cards: []const Card) u64 {
         var product: u64 = 1;
@@ -137,7 +137,7 @@ pub const CardOps = struct {
         }
         return product;
     }
-    
+
     /// Calculate prime product from rankbits (for flush evaluation)
     pub fn primeProductFromRankbits(rankbits: u32) u64 {
         var product: u64 = 1;
@@ -149,17 +149,17 @@ pub const CardOps = struct {
         }
         return product;
     }
-    
+
     /// Create a card from rank and suit
     pub fn new(rank: u32, suit: u32) Card {
         const rank_prime = PRIMES[rank];
         const bitrank: u32 = @as(u32, 1) << @intCast(rank + 16);
         const suit_shifted = suit << 12;
         const rank_shifted = rank << 8;
-        
+
         return bitrank | suit_shifted | rank_shifted | rank_prime;
     }
-    
+
     /// Create a card from index (0-51)
     pub fn fromIndex(index: u32) Card {
         const rank = index % 13;
@@ -171,7 +171,7 @@ pub const CardOps = struct {
 /// High-performance hand evaluator
 pub const HandEvaluator = struct {
     lookup_tables: LookupTables.Tables,
-    
+
     pub fn init() HandEvaluator {
         var tables = LookupTables.Tables.init();
         // Initialize the tables with actual data
@@ -184,12 +184,12 @@ pub const HandEvaluator = struct {
             .lookup_tables = tables,
         };
     }
-    
+
     /// Evaluate a 5-card hand and return hand strength rank (1 = best, 7462 = worst)
     pub fn evaluateFive(self: *const HandEvaluator, cards: [5]Card) HandRank {
         // Check for flush by ANDing all suit bits
         const flush_check = cards[0] & cards[1] & cards[2] & cards[3] & cards[4] & 0xF000;
-        
+
         if (flush_check != 0) {
             // It's a flush - use flush lookup table
             const hand_or = (cards[0] | cards[1] | cards[2] | cards[3] | cards[4]) >> 16;
@@ -201,11 +201,11 @@ pub const HandEvaluator = struct {
             return self.lookup_tables.getUnsuitedRank(prime);
         }
     }
-    
+
     /// Evaluate a 6-card hand (chooses best 5-card combination)
     pub fn evaluateSix(self: *const HandEvaluator, cards: [6]Card) HandRank {
         var best_rank: HandRank = MAX_HIGH_CARD;
-        
+
         // Check all (6 choose 5) = 6 combinations
         const combinations = [6][5]usize{
             [5]usize{ 0, 1, 2, 3, 4 },
@@ -215,25 +215,22 @@ pub const HandEvaluator = struct {
             [5]usize{ 0, 2, 3, 4, 5 },
             [5]usize{ 1, 2, 3, 4, 5 },
         };
-        
+
         for (combinations) |combo| {
-            const hand = [5]Card{
-                cards[combo[0]], cards[combo[1]], cards[combo[2]], 
-                cards[combo[3]], cards[combo[4]]
-            };
+            const hand = [5]Card{ cards[combo[0]], cards[combo[1]], cards[combo[2]], cards[combo[3]], cards[combo[4]] };
             const rank = self.evaluateFive(hand);
             if (rank < best_rank) {
                 best_rank = rank;
             }
         }
-        
+
         return best_rank;
     }
-    
+
     /// Evaluate a 7-card hand (chooses best 5-card combination)
     pub fn evaluateSeven(self: *const HandEvaluator, cards: [7]Card) HandRank {
         var best_rank: HandRank = MAX_HIGH_CARD;
-        
+
         // Check all (7 choose 5) = 21 combinations
         const combinations = [21][5]usize{
             [5]usize{ 0, 1, 2, 3, 4 }, [5]usize{ 0, 1, 2, 3, 5 }, [5]usize{ 0, 1, 2, 3, 6 },
@@ -244,21 +241,18 @@ pub const HandEvaluator = struct {
             [5]usize{ 1, 2, 3, 4, 5 }, [5]usize{ 1, 2, 3, 4, 6 }, [5]usize{ 1, 2, 3, 5, 6 },
             [5]usize{ 1, 2, 4, 5, 6 }, [5]usize{ 1, 3, 4, 5, 6 }, [5]usize{ 2, 3, 4, 5, 6 },
         };
-        
+
         for (combinations) |combo| {
-            const hand = [5]Card{
-                cards[combo[0]], cards[combo[1]], cards[combo[2]], 
-                cards[combo[3]], cards[combo[4]]
-            };
+            const hand = [5]Card{ cards[combo[0]], cards[combo[1]], cards[combo[2]], cards[combo[3]], cards[combo[4]] };
             const rank = self.evaluateFive(hand);
             if (rank < best_rank) {
                 best_rank = rank;
             }
         }
-        
+
         return best_rank;
     }
-    
+
     /// Get hand type from rank
     pub fn getHandType(rank: HandRank) HandType {
         if (rank <= MAX_STRAIGHT_FLUSH) return .straight_flush;
@@ -271,12 +265,12 @@ pub const HandEvaluator = struct {
         if (rank <= MAX_PAIR) return .pair;
         return .high_card;
     }
-    
+
     /// Convert hand type to string
     pub fn handTypeToString(hand_type: HandType) []const u8 {
         return switch (hand_type) {
             .straight_flush => "Straight Flush",
-            .four_of_a_kind => "Four of a Kind", 
+            .four_of_a_kind => "Four of a Kind",
             .full_house => "Full House",
             .flush => "Flush",
             .straight => "Straight",
@@ -286,12 +280,12 @@ pub const HandEvaluator = struct {
             .high_card => "High Card",
         };
     }
-    
+
     /// Evaluate a hand with hole cards and board
     /// Used by clustering module for feature extraction
     pub fn evaluate(self: *const HandEvaluator, hole_cards: [2]Card, board: []const Card) HandRank {
         const total_cards = 2 + board.len;
-        
+
         if (total_cards == 5) {
             // Exactly 5 cards - direct evaluation
             var cards: [5]Card = undefined;
@@ -320,7 +314,7 @@ pub const HandEvaluator = struct {
             const rank2 = CardOps.getRank(hole_cards[1]);
             const high_rank = @max(rank1, rank2);
             const low_rank = @min(rank1, rank2);
-            
+
             // Simple preflop strength estimate
             if (rank1 == rank2) {
                 // Pair - stronger than any high card
@@ -331,7 +325,7 @@ pub const HandEvaluator = struct {
                 const high_val = @as(u32, high_rank) * 100;
                 const low_val = @as(u32, low_rank) * 10;
                 const total_val = high_val + low_val;
-                
+
                 if (total_val >= MAX_HIGH_CARD) {
                     return MAX_HIGH_CARD;
                 } else {
@@ -348,30 +342,30 @@ pub const HandEvaluator = struct {
 /// SIMD-optimized batch evaluator for high performance
 pub const BatchEvaluator = struct {
     evaluator: HandEvaluator,
-    
+
     pub fn init() BatchEvaluator {
         return BatchEvaluator{
             .evaluator = HandEvaluator.init(),
         };
     }
-    
+
     /// Evaluate multiple 5-card hands simultaneously
     /// Input: slice of 5-card hands
     /// Output: slice of hand ranks (caller must provide buffer)
     pub fn evaluateFiveBatch(self: *const BatchEvaluator, hands: [][5]Card, results: []HandRank) void {
         std.debug.assert(hands.len == results.len);
-        
+
         // For now, implement sequential version
         // TODO: Add SIMD vectorization using @Vector when requirements are clearer
         for (hands, results) |hand, *result| {
             result.* = self.evaluator.evaluateFive(hand);
         }
     }
-    
+
     /// Evaluate multiple 7-card hands simultaneously
     pub fn evaluateSevenBatch(self: *const BatchEvaluator, hands: [][7]Card, results: []HandRank) void {
         std.debug.assert(hands.len == results.len);
-        
+
         for (hands, results) |hand, *result| {
             result.* = self.evaluator.evaluateSeven(hand);
         }
@@ -381,7 +375,7 @@ pub const BatchEvaluator = struct {
 // Export compile-time constants for testing
 pub const TEST_CARDS = struct {
     pub const ACE_SPADES = CardOps.fromString("As");
-    pub const KING_SPADES = CardOps.fromString("Ks"); 
+    pub const KING_SPADES = CardOps.fromString("Ks");
     pub const QUEEN_SPADES = CardOps.fromString("Qs");
     pub const JACK_SPADES = CardOps.fromString("Js");
     pub const TEN_SPADES = CardOps.fromString("Ts");
@@ -392,31 +386,31 @@ pub const TEST_CARDS = struct {
 // Basic tests to ensure correctness
 test "card creation and extraction" {
     const ace_spades = CardOps.fromString("As");
-    
+
     // Test rank extraction (Ace = 12)
     try std.testing.expect(CardOps.getRank(ace_spades) == 12);
-    
+
     // Test suit extraction (Spades = 1)
     try std.testing.expect(CardOps.getSuit(ace_spades) == SUIT_SPADES);
-    
+
     // Test prime extraction (Ace prime = 41)
     try std.testing.expect(CardOps.getPrime(ace_spades) == 41);
 }
 
 test "hand evaluation basic" {
     var evaluator = HandEvaluator.init();
-    
+
     // Royal flush in spades
     const royal_flush = [5]Card{
         TEST_CARDS.ACE_SPADES,
         TEST_CARDS.KING_SPADES,
-        TEST_CARDS.QUEEN_SPADES, 
+        TEST_CARDS.QUEEN_SPADES,
         TEST_CARDS.JACK_SPADES,
         TEST_CARDS.TEN_SPADES,
     };
-    
+
     const rank = evaluator.evaluateFive(royal_flush);
-    
+
     // Royal flush should be rank 1 (best possible hand)
     try std.testing.expect(rank == 1);
     try std.testing.expect(HandEvaluator.getHandType(rank) == .straight_flush);
@@ -425,12 +419,12 @@ test "hand evaluation basic" {
 test "prime product calculation" {
     const cards = [3]Card{
         CardOps.fromString("As"), // Prime 41
-        CardOps.fromString("Ks"), // Prime 37  
+        CardOps.fromString("Ks"), // Prime 37
         CardOps.fromString("Qs"), // Prime 31
     };
-    
+
     const product = CardOps.primeProductFromHand(&cards);
     const expected = @as(u64, 41) * 37 * 31;
-    
+
     try std.testing.expect(product == expected);
 }
