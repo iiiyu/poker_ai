@@ -15,6 +15,8 @@ pub const clustering = @import("clustering.zig");
 
 // MCCFR modules
 pub const mccfr = @import("mccfr.zig");
+pub const linear_cfr = @import("linear_cfr.zig");
+pub const game_tree = @import("game_tree.zig");
 pub const info_set = @import("info_set.zig");
 pub const regret_table = @import("regret_table.zig");
 pub const strategy_aggregator = @import("strategy_aggregator.zig");

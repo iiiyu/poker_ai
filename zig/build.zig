@@ -124,6 +124,30 @@ pub fn build(b: *std.Build) void {
     const play_step = b.step("play", "Run the interactive poker game");
     play_step.dependOn(&run_play_poker.step);
 
+    // Training executable
+    const train_exe = b.addExecutable(.{
+        .name = "train",
+        .root_source_file = b.path("src/train.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    
+    train_exe.root_module.addImport("poker_ai", lib.root_module);
+    train_exe.linkLibC();
+    train_exe.linkSystemLibrary("sqlite3");
+    
+    b.installArtifact(train_exe);
+    
+    const run_train = b.addRunArtifact(train_exe);
+    run_train.step.dependOn(b.getInstallStep());
+    
+    if (b.args) |args| {
+        run_train.addArgs(args);
+    }
+    
+    const train_step = b.step("train", "Run MCCFR training");
+    train_step.dependOn(&run_train.step);
+
     // Unit tests
     const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),

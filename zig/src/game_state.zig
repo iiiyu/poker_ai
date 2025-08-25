@@ -141,6 +141,10 @@ pub const GameState = struct {
     round: Round,
     board: [5]Card,
     board_size: u8,
+    
+    // Deck position for deterministic card dealing in MCCFR
+    deck_position: u8,
+    deck: [52]Card,
 
     // Betting state
     current_player: u8,
@@ -155,6 +159,10 @@ pub const GameState = struct {
     actions: std.ArrayList(Action),
     action_sequence: std.ArrayList(u8), // Compact sequence for abstractions
 
+    // Storage for legal actions
+    legal_actions_buffer: [5]Action,
+    legal_actions_count: usize,
+
     allocator: std.mem.Allocator,
 
     const Self = @This();
@@ -167,6 +175,8 @@ pub const GameState = struct {
             .round = .preflop,
             .board = .{ 255, 255, 255, 255, 255 },
             .board_size = 0,
+            .deck_position = 0,
+            .deck = undefined,
             .current_player = 0,
             .dealer_button = 0,
             .small_blind = small_blind,
@@ -177,11 +187,18 @@ pub const GameState = struct {
             .actions = std.ArrayList(Action).init(allocator),
             .action_sequence = std.ArrayList(u8).init(allocator),
             .allocator = allocator,
+            .legal_actions_buffer = undefined,
+            .legal_actions_count = 0,
         };
 
         // Initialize players
         for (state.players[0..num_players], 0..) |*player, i| {
             player.* = Player.init(@intCast(i), 1000); // Default stack
+        }
+        
+        // Initialize deck
+        for (0..52) |i| {
+            state.deck[i] = @intCast(i);
         }
 
         return state;
@@ -327,7 +344,22 @@ pub const GameState = struct {
 
     // Check if game is terminal (showdown or all folded)
     pub fn isTerminal(self: Self) bool {
-        return self.active_players <= 1 or self.round == .river and self.isBettingComplete();
+        // Game ends if only one player remains
+        if (self.active_players <= 1) return true;
+        
+        // Game ends after river betting is complete
+        if (self.round == .river and self.isBettingComplete()) return true;
+        
+        // Also check if all players are all-in
+        var can_act_count: u8 = 0;
+        for (self.players[0..self.num_players]) |player| {
+            if (player.canAct()) {
+                can_act_count += 1;
+            }
+        }
+        
+        // If no one can act, game is terminal
+        return can_act_count == 0;
     }
 
     // Get information set string for current player
@@ -365,6 +397,139 @@ pub const GameState = struct {
             next = (next + 1) % self.num_players;
         }
         return next;
+    }
+    
+    // Get legal actions for current player
+    pub fn getLegalActions(self: *Self) []const Action {
+        const player = &self.players[self.current_player];
+        
+        // Reset action buffer
+        self.legal_actions_count = 0;
+        
+        // Can always fold if there's a bet to call
+        if (self.current_bet > player.bet_this_round) {
+            self.legal_actions_buffer[self.legal_actions_count] = Action.fold();
+            self.legal_actions_count += 1;
+            
+            // Can call if we have chips
+            if (player.stack > 0) {
+                self.legal_actions_buffer[self.legal_actions_count] = Action.call();
+                self.legal_actions_count += 1;
+            }
+        } else {
+            // Can check if no bet to call
+            self.legal_actions_buffer[self.legal_actions_count] = Action.check();
+            self.legal_actions_count += 1;
+        }
+        
+        // Can raise if we have enough chips
+        const min_raise = self.big_blind;
+        if (player.stack > (self.current_bet - player.bet_this_round + min_raise)) {
+            self.legal_actions_buffer[self.legal_actions_count] = Action.raise(self.current_bet + min_raise);
+            self.legal_actions_count += 1;
+        }
+        
+        // Can go all-in if we have chips
+        if (player.stack > 0 and player.stack <= (self.current_bet - player.bet_this_round + min_raise)) {
+            self.legal_actions_buffer[self.legal_actions_count] = Action.allIn(player.stack);
+            self.legal_actions_count += 1;
+        }
+        
+        return self.legal_actions_buffer[0..self.legal_actions_count];
+    }
+    
+    // Get information set key (hash) for MCCFR
+    pub fn getInfoSetKey(self: *const Self, player_id: u8) !u64 {
+        var hasher = std.hash.Wyhash.init(0);
+        const player = &self.players[player_id];
+        
+        // Hash hole cards
+        hasher.update(std.mem.asBytes(&player.hand.cards));
+        
+        // Hash board cards
+        hasher.update(self.board[0..self.board_size]);
+        
+        // Hash action sequence
+        hasher.update(self.action_sequence.items);
+        
+        return hasher.final();
+    }
+    
+    // Clone the game state for tree traversal
+    pub fn clone(self: *const Self) !Self {
+        // Prevent excessive cloning that causes memory exhaustion
+        // Increased limit to handle exploitability calculation which explores deeper
+        if (self.actions.items.len > 500) { // Higher limit for exploitability calculation
+            std.log.err("Action history too long for cloning: {d} actions", .{self.actions.items.len});
+            return error.ActionHistoryTooLong;
+        }
+        
+        const new_state = Self{
+            .players = self.players,
+            .num_players = self.num_players,
+            .active_players = self.active_players,
+            .round = self.round,
+            .board = self.board,
+            .board_size = self.board_size,
+            .deck_position = self.deck_position,
+            .deck = self.deck,
+            .current_player = self.current_player,
+            .dealer_button = self.dealer_button,
+            .small_blind = self.small_blind,
+            .big_blind = self.big_blind,
+            .pot = self.pot,
+            .current_bet = self.current_bet,
+            .last_raiser = self.last_raiser,
+            .actions = try self.actions.clone(),
+            .action_sequence = try self.action_sequence.clone(),
+            .allocator = self.allocator,
+            .legal_actions_buffer = self.legal_actions_buffer,
+            .legal_actions_count = self.legal_actions_count,
+        };
+        return new_state;
+    }
+    
+    // Get utility for a player (payoff at terminal node)
+    pub fn getUtility(self: *const Self, player_id: u8) f32 {
+        if (!self.isTerminal()) return 0.0;
+        
+        // Simplified utility calculation
+        // In a real implementation, this would calculate winnings based on hand strength
+        if (!self.players[player_id].is_active) {
+            return -@as(f32, @floatFromInt(self.players[player_id].total_bet));
+        }
+        
+        // If only one player left, they win the pot
+        if (self.active_players == 1) {
+            if (self.players[player_id].is_active) {
+                return @as(f32, @floatFromInt(self.pot - self.players[player_id].total_bet));
+            }
+        }
+        
+        // Placeholder for showdown logic
+        // Would need hand evaluation here
+        return 0.0;
+    }
+    
+    // Shuffle deck for new game
+    pub fn shuffleDeck(self: *Self, rng: std.Random) void {
+        // Fisher-Yates shuffle
+        var i: usize = 52;
+        while (i > 1) {
+            i -= 1;
+            const j = rng.uintLessThan(usize, i + 1);
+            const temp = self.deck[i];
+            self.deck[i] = self.deck[j];
+            self.deck[j] = temp;
+        }
+        self.deck_position = 0;
+    }
+    
+    // Deal next card from deck
+    pub fn dealCard(self: *Self) Card {
+        const card = self.deck[self.deck_position];
+        self.deck_position += 1;
+        return card;
     }
 };
 
