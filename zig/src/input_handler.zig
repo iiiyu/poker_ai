@@ -59,19 +59,54 @@ pub const InputEvent = union(enum) {
 /// Terminal configuration for input handling
 const TerminalConfig = struct {
     // Store original terminal settings for restoration
-    original_settings: if (builtin.os.tag == .windows) void else std.os.linux.termios,
+    original_settings: if (builtin.os.tag == .windows) void else std.posix.termios,
     
     fn enableRawMode(self: *TerminalConfig) !void {
-        _ = self; // Unused for now
-        // TODO: Implement terminal raw mode configuration
-        // For now, we'll use regular terminal input
-        return;
+        if (builtin.os.tag == .windows) {
+            // Windows implementation would use SetConsoleMode
+            // For now, skip on Windows
+            return;
+        } else {
+            // Get current terminal settings
+            self.original_settings = try std.posix.tcgetattr(std.posix.STDIN_FILENO);
+            
+            // Create new settings for raw mode
+            var raw_settings = self.original_settings;
+            
+            // Disable canonical mode (line buffering) and echo
+            raw_settings.lflag.ICANON = false;
+            raw_settings.lflag.ECHO = false;
+            raw_settings.lflag.ISIG = false;  // Disable signal generation (Ctrl+C, etc.)
+            
+            // Disable input processing  
+            raw_settings.iflag.IXON = false;   // Disable XON/XOFF flow control
+            raw_settings.iflag.ICRNL = false;  // Don't translate CR to NL
+            raw_settings.iflag.INPCK = false;  // Disable parity checking
+            raw_settings.iflag.ISTRIP = false; // Don't strip 8th bit
+            
+            // Disable output processing
+            raw_settings.oflag.OPOST = false;
+            
+            // Set character size to 8 bits
+            raw_settings.cflag.CSIZE = .CS8;
+            
+            // Set read timeout: return immediately if no input
+            raw_settings.cc[@intFromEnum(std.posix.V.TIME)] = 0;
+            raw_settings.cc[@intFromEnum(std.posix.V.MIN)] = 0;
+            
+            // Apply the settings
+            try std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw_settings);
+        }
     }
     
     fn restoreMode(self: *TerminalConfig) !void {
-        _ = self; // Unused for now
-        // TODO: Implement terminal mode restoration
-        return;
+        if (builtin.os.tag == .windows) {
+            // Windows implementation would restore console mode
+            return;
+        } else {
+            // Restore original terminal settings
+            try std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, self.original_settings);
+        }
     }
 };
 
@@ -111,7 +146,10 @@ pub const InputHandler = struct {
     
     /// Read a single character without blocking
     pub fn readChar(self: *InputHandler) !?u8 {
-        _ = self; // Remove unused variable warning
+        if (!self.is_raw_mode) {
+            // If not in raw mode, don't try to read
+            return null;
+        }
         
         if (builtin.os.tag == .windows) {
             // Windows implementation would use _kbhit() and _getch()
@@ -119,6 +157,9 @@ pub const InputHandler = struct {
             return null;
         } else {
             var buffer: [1]u8 = undefined;
+            
+            // The terminal is already in raw mode with VMIN=0 and VTIME=0
+            // This makes read() non-blocking
             const bytes_read = std.posix.read(std.posix.STDIN_FILENO, &buffer) catch |err| switch (err) {
                 error.WouldBlock => return null,
                 else => return err,
@@ -170,10 +211,8 @@ pub const InputHandler = struct {
             'w', 'W' => .up,    // W key
             's', 'S' => .down,  // S key
             '\r', '\n', ' ' => .select, // Enter or Space
-            'b' => .back,  // B key
-            27 => .back,   // ESC key
-            65 => .up,     // Up arrow
-            'B' => .back,  // B uppercase (ASCII 66)
+            'b', 'B' => .back,  // B key
+            27 => .back,   // ESC key (plain ESC, not arrow sequence)
             'q', 'Q' => .quit,
             else => .invalid,
         };
@@ -402,39 +441,81 @@ pub const InputHandler = struct {
         selected_index: *usize,
         timeout_ms: ?u32
     ) !InputEvent {
-        const char = if (timeout_ms) |timeout| 
-            try self.readWithTimeout(timeout) 
-        else 
-            try self.readChar();
+        // Use getKeyInput for proper escape sequence handling
+        const input_event = if (timeout_ms) |timeout| blk: {
+            const char = try self.readWithTimeout(timeout);
+            if (char == null) {
+                break :blk InputEvent{ .timeout = {} };
+            }
             
-        if (char == null) {
-            return InputEvent{ .timeout = {} };
-        }
+            // Handle arrow key sequences
+            if (char.? == 27) { // ESC sequence start
+                if (try self.readChar()) |second| {
+                    if (second == 91) { // '[' for arrow keys
+                        if (try self.readChar()) |third| {
+                            break :blk InputEvent{ .menu_action = switch (third) {
+                                65 => .up,    // Up arrow
+                                66 => .down,  // Down arrow
+                                67 => .select, // Right arrow (treat as select)
+                                68 => .back,  // Left arrow (treat as back)
+                                else => .invalid,
+                            }};
+                        }
+                    }
+                }
+                break :blk InputEvent{ .menu_action = .back }; // Plain ESC
+            }
+            
+            const menu_action = self.parseMenuAction(char.?);
+            if (menu_action != .invalid) {
+                break :blk InputEvent{ .menu_action = menu_action };
+            }
+            
+            // Check if it's a number key for direct selection
+            if (char.? >= '1' and char.? <= '9') {
+                const index = char.? - '1';
+                if (index < menu_items.len) {
+                    selected_index.* = index;
+                    break :blk InputEvent{ .menu_action = .select };
+                }
+            }
+            
+            break :blk InputEvent{ .menu_action = .invalid };
+        } else blk: {
+            break :blk try self.getKeyInput();
+        };
         
-        const menu_action = self.parseMenuAction(char.?);
-        
-        switch (menu_action) {
-            .up => {
-                if (selected_index.* > 0) {
-                    selected_index.* -= 1;
-                } else {
-                    selected_index.* = menu_items.len - 1; // Wrap to bottom
+        switch (input_event) {
+            .menu_action => |menu_action| {
+                switch (menu_action) {
+                    .up => {
+                        if (selected_index.* > 0) {
+                            selected_index.* -= 1;
+                        } else {
+                            selected_index.* = menu_items.len - 1; // Wrap to bottom
+                        }
+                        return InputEvent{ .menu_action = menu_action };
+                    },
+                    .down => {
+                        if (selected_index.* < menu_items.len - 1) {
+                            selected_index.* += 1;
+                        } else {
+                            selected_index.* = 0; // Wrap to top
+                        }
+                        return InputEvent{ .menu_action = menu_action };
+                    },
+                    .select, .back, .quit => {
+                        return InputEvent{ .menu_action = menu_action };
+                    },
+                    .invalid => {
+                        return InputEvent{ .menu_action = .invalid };
+                    },
                 }
             },
-            .down => {
-                if (selected_index.* < menu_items.len - 1) {
-                    selected_index.* += 1;
-                } else {
-                    selected_index.* = 0; // Wrap to top
-                }
-            },
-            .select, .back, .quit => {
-                return InputEvent{ .menu_action = menu_action };
-            },
-            .invalid => {
-                // Check if it's a number key for direct selection
-                if (char.? >= '1' and char.? <= '9') {
-                    const index = char.? - '1';
+            .raw_key => |char| {
+                // Handle number keys for direct selection
+                if (char >= '1' and char <= '9') {
+                    const index = char - '1';
                     if (index < menu_items.len) {
                         selected_index.* = index;
                         return InputEvent{ .menu_action = .select };
@@ -442,9 +523,13 @@ pub const InputHandler = struct {
                 }
                 return InputEvent{ .menu_action = .invalid };
             },
+            .timeout => {
+                return InputEvent{ .timeout = {} };
+            },
+            else => {
+                return InputEvent{ .menu_action = .invalid };
+            },
         }
-        
-        return InputEvent{ .menu_action = menu_action };
     }
     
     /// Get yes/no confirmation

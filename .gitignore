@@ -287,3 +287,39 @@ dmypy.json
 uv.lock
 
 .serena/
+
+### ZIG STUFF
+
+# Zig cache directory
+zig/.zig-cache/
+.zig-cache/
+
+# Zig build output
+zig/zig-out/
+zig-out/
+
+# Zig object files and executables
+*.o
+*.exe
+*.pdb
+*.lib
+*.a
+*.dylib
+*.dll
+
+# Test files and temporary scripts
+zig/test_input
+zig/test_input.zig
+zig/test_*.sh
+zig/*.test.zig
+
+# Temporary build artifacts
+zig/.zig-cache/tmp/
+zig/.zig-cache/o/
+zig/.zig-cache/h/
+zig/.zig-cache/z/
+
+# Documentation and temporary notes
+zig/KEYBOARD_FIX_SUMMARY.md
+zig/TODO.md
+zig/NOTES.md

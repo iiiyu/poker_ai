@@ -97,8 +97,9 @@ pub const GameDisplay = struct {
         dealer_position: u8,
         current_player: ?u8
     ) !void {
-        // Clear screen
-        ascii_cards.Screen.clear();
+        // Move cursor to home position instead of clearing screen
+        // This prevents flashing by overwriting existing content
+        ascii_cards.Screen.moveTo(1, 1);
         
         // Draw border
         try self.drawBorder();
@@ -123,6 +124,9 @@ pub const GameDisplay = struct {
         
         // Draw status bar
         try self.drawStatusBar(players);
+        
+        // Flush output to ensure smooth rendering
+        std.io.getStdOut().writer().writeAll("") catch {};
     }
     
     /// Draw table border

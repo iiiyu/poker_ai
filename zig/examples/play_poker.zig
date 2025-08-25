@@ -316,10 +316,7 @@ pub fn main() !void {
         std.debug.print("  • Press Q to quit at any time\n", .{});
         std.debug.print("  • Use +/- to adjust raise amounts\n", .{});
     }
-    std.debug.print("\nPress any key to start the game...\n", .{});
-    
-    // Wait for user to be ready
-    _ = try std.io.getStdIn().reader().readByte();
+    std.debug.print("\nStarting game...\n", .{});
     
     // Start the terminal UI
     try terminal_ui.runTerminalUI(allocator, config);

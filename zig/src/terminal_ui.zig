@@ -163,8 +163,8 @@ pub const TerminalUI = struct {
                 .analysis => try self.handleAnalysis(),
             }
 
-            // Small delay to prevent busy waiting
-            std.time.sleep(16 * std.time.ns_per_ms); // ~60 FPS
+            // Small delay to prevent busy waiting and reduce flashing
+            std.time.sleep(50 * std.time.ns_per_ms); // ~20 FPS (more than enough for a poker game)
         }
     }
 
@@ -357,6 +357,9 @@ pub const TerminalUI = struct {
 
     /// Handle main game loop
     fn handleGame(self: *TerminalUI) !void {
+        // Clear screen once at the start of the game
+        ascii_cards.Screen.clear();
+        
         // Initialize game
         const game_config = game_engine.GameConfig{
             .small_blind = self.config.small_blind,
@@ -368,11 +371,12 @@ pub const TerminalUI = struct {
         var game = try TexasHoldemGameEngine.init(self.allocator, self.config.num_players, game_config);
         defer game.deinit();
 
-        // Initialize players from config
+        // Update player stacks from config (players are already initialized in game engine)
         for (self.config.players, 0..) |player_config, i| {
-            const player_id = @as(u8, @intCast(i));
-            const game_player = Player.init(player_id, player_config.stack_size);
-            game.players[i] = game_player;
+            if (i < game.num_players) {
+                // Just update the stack size, don't replace the entire player
+                game.players[i].stack = player_config.stack_size;
+            }
         }
 
         self.display.clearActionHistory();
