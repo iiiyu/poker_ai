@@ -4,26 +4,38 @@ A blazing-fast poker AI implementation in Zig featuring Monte Carlo Counterfactu
 
 ## 🚀 Features
 
-### Core Capabilities
-- **Linear CFR Algorithm**: 2-3x faster convergence than vanilla CFR+
-- **Real-time Search**: Online strategy refinement during play (5-10 seconds per decision)
-- **Depth-Limited Solving**: Subgame solving with configurable depth
-- **Dynamic Action Abstraction**: Adaptive bet sizing based on pot geometry
-- **Parallel Training**: Multi-threaded CFR with work stealing
-- **Continual Re-solving**: Dynamic strategy adjustment during play
-- **K-means++ Clustering**: Advanced hand abstraction for tractable solving
-- **Tournament System**: Multiple formats (Cash, Freezeout, SNG, Heads-up)
-- **Terminal UI**: Interactive gameplay with ASCII card display
-- **Python FFI**: Seamless integration via C API
+### Implemented Features
+- **Ultra-Fast Hand Evaluation**: 526x faster than Python implementation
+- **K-means++ Clustering**: Advanced hand abstraction for tractable solving  
+- **Tournament System**: Demonstration of multiple formats (Cash, Freezeout, SNG, Heads-up)
+- **Terminal UI**: Interactive poker gameplay with ASCII card display
+- **Game Engine**: Complete Texas Hold'em rules implementation
+- **Action Validation**: Robust validation of all poker actions
+- **Python FFI**: C API for integration (partially implemented)
 
-### Performance
+### In Development / Planned
+- **MCCFR Training**: Basic structure exists, not fully functional for Texas Hold'em
+- **Linear CFR Algorithm**: Designed for 2-3x faster convergence (not yet implemented)
+- **Real-time Search**: Online strategy refinement during play (planned)
+- **Depth-Limited Solving**: Subgame solving with configurable depth (planned)
+- **Dynamic Action Abstraction**: Adaptive bet sizing (planned)
+- **Parallel Training**: Multi-threaded CFR with work stealing (designed, not implemented)
+- **Continual Re-solving**: Dynamic strategy adjustment (planned)
+
+### Performance (Measured)
 | Component | Python | Zig | Improvement |
 |-----------|--------|-----|-------------|
 | Hand Evaluation | 19 hands/sec | 10,000 hands/sec | **526x faster** |
 | 7-Card Evaluation | 50,000 ns | 95 ns | **526x faster** |
-| Memory Usage (Training) | 8.4 GB | 75 MB | **112x reduction** |
-| CFR Iteration | 10/sec | 1,000/sec | **100x faster** |
-| Strategy Convergence | 1M iterations | 200K iterations | **5x faster** |
+| Prime Product Calc | - | 10M/sec | Ultra-fast |
+
+### Performance (Projected)
+*These metrics are based on design specifications, not yet fully implemented:*
+| Component | Python | Zig (Target) | Expected |
+|-----------|--------|--------------|----------|
+| Memory Usage (Training) | 8.4 GB | 75 MB | 112x reduction |
+| CFR Iteration | 10/sec | 1,000/sec | 100x faster |
+| Strategy Convergence | 1M iterations | 200K iterations | 5x faster |
 
 ## 📦 Installation
 
@@ -65,17 +77,17 @@ zig build test
 
 ## 🎮 Quick Start
 
-### 1. Play Against AI
+### 1. Play Interactive Poker
 
 ```bash
-# Interactive poker game with default settings
+# Interactive poker game with terminal UI
 zig build play
 
 # Or run directly
 ./zig-out/bin/play_poker
 
 # With custom settings
-./zig-out/bin/play_poker --players 4 --starting-stack 2000 --difficulty expert
+./zig-out/bin/play_poker --players 4 --starting-stack 2000
 ```
 
 ### Command Line Options
@@ -84,145 +96,106 @@ zig build play
 --starting-stack <n>    Starting chip stack (default: 1000)
 --small-blind <n>       Small blind amount (default: 10)
 --big-blind <n>         Big blind amount (default: 20)
---difficulty <level>    AI difficulty: weak/medium/strong/expert (default: medium)
 --max-hands <n>         Maximum hands to play (default: unlimited)
 --no-color              Disable colored output
 ```
 
-### 2. Run Demo
+### 2. Run Library Demo
 
 ```bash
-# Run the demonstration
-zig build demo
-
-# Or directly
-./zig-out/bin/poker_ai_demo
+# Run the main library demonstration
+zig build run
 
 # Output shows:
 # - Hand evaluation examples
-# - Game state management
-# - CFR training initialization
+# - Game state management  
+# - CFR training initialization (Note: Currently crashes during training)
 ```
 
-## 🧠 Training the AI
+## 🧠 Training Status
 
-### Basic Training
+### Current Implementation
+
+⚠️ **Note**: Full CFR training is not yet functional in the Zig version. The training infrastructure exists but is incomplete.
+
+**What's Available:**
+- Basic MCCFR trainer structure in `src/mccfr.zig`
+- Simple demonstration in `examples/mccfr_demo.zig` (simplified Kuhn-like poker)
+- CFR configuration and initialization code
+- Strategy table and regret table structures
+
+**Known Issues:**
+- The main demo (`zig build run`) crashes when attempting to run training
+- No dedicated training executable or build command
+- Strategy persistence not yet implemented
+- Parallel training not functional
+
+### Running the MCCFR Demo
+
+A simplified MCCFR demonstration is available that shows convergence on a toy poker variant:
 
 ```bash
-# Train a new AI model with default settings
-zig build train
+# Build and run the MCCFR demo manually
+zig build-exe examples/mccfr_demo.zig -femit-bin=./mccfr_demo
+./mccfr_demo
 
-# This will:
-# 1. Initialize MCCFR trainer with 100,000 iterations
-# 2. Use Linear CFR for faster convergence
-# 3. Save checkpoints every 1,000 iterations
-# 4. Output final strategy to ./strategies/
+# Output shows convergence of a simple 3-card poker game
+# This demonstrates the algorithm works but is not full Texas Hold'em
 ```
 
-### Advanced Training Configuration
+### Using the Python Version for Training
 
-Create a training configuration file or use command-line arguments:
+For actual poker AI training, use the Python implementation:
 
 ```bash
-# Basic training with progress monitoring
-zig build train -- --iterations 100000 --threads 8
+# Navigate to Python directory
+cd ../python
 
-# Advanced training with Linear CFR
-zig build train -- \
-    --algorithm linear_cfr \
-    --iterations 1000000 \
-    --threads 16 \
-    --checkpoint-interval 5000 \
-    --output-dir ./models/
+# Install dependencies
+pip install -r requirements.txt
 
-# Resume training from checkpoint
-zig build train -- --resume ./models/checkpoint_50000.strat
+# Train a model
+python train_mccfr.py --iterations 1000000 --threads 8
 
-# Train with custom game parameters
-zig build train -- \
-    --players 6 \
-    --starting-stack 10000 \
-    --small-blind 50 \
-    --big-blind 100
+# The trained model can then be exported for use with the Zig version
 ```
 
-### Programmatic Training
+### Future Training Features (Planned)
 
-```zig
-// examples/train_custom.zig
-const std = @import("std");
-const poker_ai = @import("poker_ai");
+The following features are designed but not yet implemented:
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+- Linear CFR for 2-3x faster convergence
+- Parallel MCCFR with work stealing
+- Dynamic action abstraction
+- Continual re-solving during play
+- Strategy checkpoint/resume
+- Exploitability calculation
 
-    // Configure training
-    const config = poker_ai.mccfr.MCCFRConfig{
-        .iterations = 100_000,
-        .exploration = 0.6,
-        .threads = 8,
-        .use_cfr_plus = true,
-        .variance_reduction = true,
-    };
+## 🔬 Available Examples and Demos
 
-    // Initialize trainer
-    var trainer = try poker_ai.mccfr.MCCFRTrainer.init(
-        allocator,
-        config,
-        &regret_table,
-        &strategy_agg,
-        &sampler
-    );
-    defer trainer.deinit();
-
-    // Train
-    try trainer.train();
-
-    // Save strategy
-    try trainer.saveStrategy("./my_strategy.bin");
-}
-```
-
-### Monitoring Training Progress
+### Tournament System Demo
 
 ```bash
-# Real-time monitoring
-zig build train -- --monitor
-
-# Output example:
-# [INFO] Starting MCCFR training
-# [INFO] Threads: 8, Iterations: 100000
-# [INFO] ======================================
-# [INFO] Iteration 1000: exploitability = 145.234231
-# [INFO] Iteration 2000: exploitability = 98.445123
-# [INFO] Iteration 3000: exploitability = 67.234234
-# [INFO] Checkpoint saved: checkpoint_5000.strat
-# [INFO] Memory: 75MB / 512MB
-# [INFO] ETA: 00:45:23
-```
-
-## 🔬 Evaluating Trained Models
-
-### Strategy Analysis
-
-```bash
-# Analyze a trained strategy
-zig build analyze -- --strategy ./strategies/final.strat
-
-# Calculate exploitability
-zig build exploit -- --strategy ./strategies/final.strat
-```
-
-### Tournament Testing
-
-```bash
-# Run tournament with trained AI
+# Run tournament demonstration
 zig build tournament
 
-# Or with custom settings
-./zig-out/bin/tournament_demo --games 1000 --players 6
+# Shows various tournament formats:
+# - Heads-up tournaments
+# - Sit-N-Go tournaments
+# - Parallel tournament evaluation
+# - AI agent comparison studies
+```
+
+### Clustering Demo
+
+```bash
+# Run clustering demonstration
+zig build clustering
+
+# Demonstrates:
+# - K-means++ clustering for hand abstraction
+# - Feature extraction from poker hands
+# - Cluster visualization
 ```
 
 ## 📊 Benchmarking
@@ -333,22 +306,32 @@ var batch_eval = poker_ai.hand_eval.BatchEvaluator.init();
 batch_eval.evaluateFiveBatch(&hands, &results);
 ```
 
-### MCCFR Training API
+### MCCFR Training API (In Development)
 
 ```zig
+// Note: Training API exists but is not fully functional
+// The following shows the intended interface:
+
 // Initialize MCCFR trainer
-var trainer = try poker_ai.mccfr.MCCFRTrainer.init(allocator, .{
-    .iterations = 100000,
-    .exploration = 0.6,
-    .threads = 8,
-});
+var config = poker_ai.cfr.CFRConfig{
+    .iterations = 100,
+    .exploration_probability = 0.6,
+    .prune_threshold = -300.0,
+    .discount_alpha = 1.5,
+    .discount_beta = 0.0,
+};
+
+var trainer = try poker_ai.cfr.MCCFRTrainer.init(
+    allocator,
+    config,
+    &strategy_table,
+    &abstraction_table,
+    &hand_evaluator,
+);
 defer trainer.deinit();
 
-// Train strategy
-try trainer.train();
-
-// Save strategy
-try trainer.saveStrategy("my_strategy.bin");
+// Note: trainer.train() currently causes crashes in full poker
+// Works only in simplified demo (mccfr_demo.zig)
 ```
 
 ### Clustering API
@@ -435,10 +418,15 @@ print(f"Hand rank: {rank}")
    - Some tests have minor type mismatches with Zig 0.14
    - Solution: Build without tests: `zig build -Dskip-tests`
 
-3. **CFR training appears to hang**
-   - The demo currently shows "Created MCCFR trainer, starting training..." then stops
-   - This is a known issue with the current implementation
-   - Workaround: Use the Python version for training, then import strategies
+3. **CFR training crashes in main demo**
+   - Running `zig build run` shows "Created MCCFR trainer, starting training..." then crashes
+   - This is a known limitation - full Texas Hold'em CFR training is not yet implemented
+   - Workaround: Use the simplified `mccfr_demo.zig` for algorithm demonstration, or use Python version for real training
+
+4. **"zig build train" command not found**
+   - There is no training build step in the current implementation
+   - Training infrastructure exists but is not exposed as a build command
+   - See the Training Status section above for available options
 
 ## 📈 Performance Tips
 
@@ -460,6 +448,26 @@ print(f"Hand rank: {rank}")
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for development guidelines.
+
+## 📝 Project Status
+
+### What Works
+✅ **Hand Evaluation** - Ultra-fast, fully functional  
+✅ **Game Engine** - Complete Texas Hold'em rules  
+✅ **Interactive Play** - Terminal UI for playing poker  
+✅ **Tournament Demo** - Shows tournament structure (simulation)  
+✅ **Clustering Demo** - K-means clustering demonstration  
+✅ **Simple MCCFR** - Works on toy 3-card poker game  
+
+### What Doesn't Work Yet
+❌ **Full MCCFR Training** - Crashes when attempting Texas Hold'em training  
+❌ **Strategy Persistence** - No save/load functionality  
+❌ **Parallel Training** - Not implemented  
+❌ **Pluribus Features** - Real-time search, depth-limited solving not implemented  
+❌ **Python Integration** - C API partially implemented  
+
+### Recommendation
+For production poker AI training, use the Python implementation in `../python/`. The Zig version excels at hand evaluation and game mechanics but lacks complete training functionality.
 
 ## 📄 License
 

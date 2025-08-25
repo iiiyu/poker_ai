@@ -632,6 +632,10 @@ pub const AbstractionTable = struct {
         if (self.cluster_storage) |storage| {
             // Copy current clustering data to storage
             if (self.preflop_clusterer) |clusterer| {
+                // Free old allocation if it exists before creating new one
+                if (storage.preflop_clusters.len > 0) {
+                    self.allocator.free(storage.preflop_clusters);
+                }
                 storage.preflop_clusters = try self.allocator.dupe(u8, clusterer.clusters);
             }
 

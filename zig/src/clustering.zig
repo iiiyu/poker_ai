@@ -862,12 +862,27 @@ pub const ClusterStorage = struct {
 
         // Read preflop clusters
         const preflop_len = try reader.readInt(u32, .little);
+        // Free existing allocation before creating new one
+        if (self.preflop_clusters.len > 0) {
+            self.allocator.free(self.preflop_clusters);
+        }
         self.preflop_clusters = try self.allocator.alloc(u8, preflop_len);
         _ = try reader.read(self.preflop_clusters);
 
-        // Read centroids
+        // Read centroids (free existing allocations first)
+        if (self.flop_centroids.len > 0) {
+            self.allocator.free(self.flop_centroids);
+        }
         self.flop_centroids = try self.readCentroids(&reader);
+        
+        if (self.turn_centroids.len > 0) {
+            self.allocator.free(self.turn_centroids);
+        }
         self.turn_centroids = try self.readCentroids(&reader);
+        
+        if (self.river_centroids.len > 0) {
+            self.allocator.free(self.river_centroids);
+        }
         self.river_centroids = try self.readCentroids(&reader);
     }
 
