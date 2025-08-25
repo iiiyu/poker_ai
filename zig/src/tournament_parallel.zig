@@ -161,12 +161,12 @@ pub const AggregatedResults = struct {
     }
 
     pub fn getPlayerRankings(self: Self, allocator: std.mem.Allocator) ![]PlayerAggregate {
-        var rankings = std.ArrayList(PlayerAggregate).init(allocator);
-        defer rankings.deinit();
+        var rankings = try std.ArrayList(PlayerAggregate).initCapacity(allocator, 0);
+        defer rankings.deinit(allocator);
 
         var iter = self.player_aggregates.valueIterator();
         while (iter.next()) |aggregate| {
-            try rankings.append(aggregate.*);
+            try rankings.append(self.allocator, aggregate.*);
         }
 
         // Sort by ELO rating
@@ -179,7 +179,7 @@ pub const AggregatedResults = struct {
 
         std.sort.insertion(PlayerAggregate, rankings.items, {}, SortContext.lessThan);
 
-        return try rankings.toOwnedSlice();
+        return try rankings.toOwnedSlice(self.allocator);
     }
 };
 
@@ -313,8 +313,8 @@ pub const ParallelTournamentRunner = struct {
         var results_mutex = std.Thread.Mutex{};
 
         // Create tasks for tournaments
-        var tasks = std.ArrayList(TournamentTask).init(self.allocator);
-        defer tasks.deinit();
+        var tasks = try std.ArrayList(TournamentTask).initCapacity(self.allocator, 0);
+        defer tasks.deinit(self.allocator);
 
         for (0..self.config.num_tournaments) |i| {
             const task = TournamentTask{
@@ -324,7 +324,7 @@ pub const ParallelTournamentRunner = struct {
                 .results_mutex = &results_mutex,
                 .allocator = self.allocator,
             };
-            try tasks.append(task);
+            try tasks.append(self.allocator, task);
         }
 
         // Submit tasks to thread pool
@@ -334,7 +334,7 @@ pub const ParallelTournamentRunner = struct {
 
         // Wait for completion
         while (self.thread_pool.totalJobs() > 0) {
-            std.time.sleep(1000000); // Sleep 1ms
+            std.Thread.sleep(1000000); // Sleep 1ms
         }
 
         return results;

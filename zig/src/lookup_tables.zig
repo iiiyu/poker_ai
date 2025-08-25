@@ -48,7 +48,7 @@ pub const TableGenerator = struct {
 
     /// Generate all flush patterns (excluding straight flushes)
     fn generateFlushPatterns(allocator: std.mem.Allocator) ![]u32 {
-        var patterns = std.ArrayList(u32).init(allocator);
+        var patterns = try std.ArrayList(u32).initCapacity(allocator, 0);
 
         // Start with lowest 5-bit pattern (5 high straight)
         var current: u32 = 0b11111; // 31
@@ -68,13 +68,13 @@ pub const TableGenerator = struct {
 
             // Only add non-straight-flush patterns
             if (!is_straight_flush) {
-                try patterns.append(current);
+                try patterns.append(allocator, current);
             }
         }
 
         // Reverse to rank from strongest to weakest
         std.mem.reverse(u32, patterns.items);
-        return try patterns.toOwnedSlice();
+        return try patterns.toOwnedSlice(allocator);
     }
 
     /// Generate prime product from rankbits
@@ -91,12 +91,12 @@ pub const TableGenerator = struct {
 
     /// Generate flush lookup table entries
     fn generateFlushLookup(allocator: std.mem.Allocator) ![]LookupEntry {
-        var entries = std.ArrayList(LookupEntry).init(allocator);
+        var entries = try std.ArrayList(LookupEntry).initCapacity(allocator, 0);
 
         // 1. Straight flushes (rank 1-10)
         for (STRAIGHT_FLUSH_PATTERNS, 0..) |pattern, i| {
             const prime_product = primeProductFromRankbits(pattern);
-            try entries.append(LookupEntry{
+            try entries.append(allocator, LookupEntry{
                 .prime_product = prime_product,
                 .rank = @intCast(i + 1),
             });
@@ -108,18 +108,18 @@ pub const TableGenerator = struct {
 
         for (flush_patterns, 0..) |pattern, i| {
             const prime_product = primeProductFromRankbits(pattern);
-            try entries.append(LookupEntry{
+            try entries.append(allocator, LookupEntry{
                 .prime_product = prime_product,
                 .rank = @intCast(MAX_FULL_HOUSE + 1 + i),
             });
         }
 
-        return try entries.toOwnedSlice();
+        return try entries.toOwnedSlice(allocator);
     }
 
     /// Generate unsuited lookup table entries
     fn generateUnsuitedLookup(allocator: std.mem.Allocator) ![]LookupEntry {
-        var entries = std.ArrayList(LookupEntry).init(allocator);
+        var entries = try std.ArrayList(LookupEntry).initCapacity(allocator, 0);
 
         // Rank ordering (same as Python)
         const backwards_ranks = [13]u8{ 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
@@ -131,7 +131,7 @@ pub const TableGenerator = struct {
             for (backwards_ranks) |kicker_rank| {
                 if (quad_rank != kicker_rank) {
                     const product = std.math.pow(u64, PRIMES[quad_rank], 4) * PRIMES[kicker_rank];
-                    try entries.append(LookupEntry{
+                    try entries.append(allocator, LookupEntry{
                         .prime_product = product,
                         .rank = rank,
                     });
@@ -147,7 +147,7 @@ pub const TableGenerator = struct {
                 if (trip_rank != pair_rank) {
                     const product = std.math.pow(u64, PRIMES[trip_rank], 3) *
                         std.math.pow(u64, PRIMES[pair_rank], 2);
-                    try entries.append(LookupEntry{
+                    try entries.append(allocator, LookupEntry{
                         .prime_product = product,
                         .rank = rank,
                     });
@@ -160,7 +160,7 @@ pub const TableGenerator = struct {
         rank = MAX_FLUSH + 1;
         for (STRAIGHT_FLUSH_PATTERNS) |pattern| {
             const product = primeProductFromRankbits(pattern);
-            try entries.append(LookupEntry{
+            try entries.append(allocator, LookupEntry{
                 .prime_product = product,
                 .rank = rank,
             });
@@ -177,7 +177,7 @@ pub const TableGenerator = struct {
                     if (kicker2 == trip_rank) continue;
                     const product = std.math.pow(u64, PRIMES[trip_rank], 3) *
                         PRIMES[kicker1] * PRIMES[kicker2];
-                    try entries.append(LookupEntry{
+                    try entries.append(allocator, LookupEntry{
                         .prime_product = product,
                         .rank = rank,
                     });
@@ -195,7 +195,7 @@ pub const TableGenerator = struct {
                         const product = std.math.pow(u64, PRIMES[pair1], 2) *
                             std.math.pow(u64, PRIMES[pair2], 2) *
                             PRIMES[kicker];
-                        try entries.append(LookupEntry{
+                        try entries.append(allocator, LookupEntry{
                             .prime_product = product,
                             .rank = rank,
                         });
@@ -217,7 +217,7 @@ pub const TableGenerator = struct {
                         if (k3 == pair_rank) continue;
                         const product = std.math.pow(u64, PRIMES[pair_rank], 2) *
                             PRIMES[k1] * PRIMES[k2] * PRIMES[k3];
-                        try entries.append(LookupEntry{
+                        try entries.append(allocator, LookupEntry{
                             .prime_product = product,
                             .rank = rank,
                         });
@@ -234,14 +234,14 @@ pub const TableGenerator = struct {
 
         for (flush_patterns) |pattern| {
             const product = primeProductFromRankbits(pattern);
-            try entries.append(LookupEntry{
+            try entries.append(allocator, LookupEntry{
                 .prime_product = product,
                 .rank = rank,
             });
             rank += 1;
         }
 
-        return try entries.toOwnedSlice();
+        return try entries.toOwnedSlice(allocator);
     }
 };
 

@@ -1,5 +1,5 @@
 const std = @import("std");
-const hand_eval = @import("hand_eval.zig");
+const io_helpers = @import("io_helpers.zig");const hand_eval = @import("hand_eval.zig");
 const game_state = @import("game_state.zig");
 
 // Constants for clustering configuration
@@ -116,8 +116,8 @@ pub const FeatureExtractor = struct {
         };
 
         // Create deck excluding known cards
-        var deck = std.ArrayList(hand_eval.Card).init(self.allocator);
-        defer deck.deinit();
+        var deck = try std.ArrayList(hand_eval.Card).initCapacity(self.allocator, 0);
+        defer deck.deinit(self.allocator);
 
         // Add all 52 cards initially
         for (0..52) |i| {
@@ -139,7 +139,7 @@ pub const FeatureExtractor = struct {
             }
 
             if (!in_play) {
-                try deck.append(card);
+                try deck.append(self.allocator, card);
             }
         }
 
@@ -239,12 +239,12 @@ pub const FeatureExtractor = struct {
         @memcpy(future_board[0..current_board.len], current_board);
 
         // Sample remaining cards
-        var available = std.ArrayList(hand_eval.Card).init(self.allocator);
-        defer available.deinit();
+        var available = try std.ArrayList(hand_eval.Card).initCapacity(self.allocator, 0);
+        defer available.deinit(self.allocator);
 
         for (deck.items) |card| {
             if (card != opp_cards[0] and card != opp_cards[1]) {
-                try available.append(card);
+                try available.append(self.allocator, card);
             }
         }
 
@@ -826,81 +826,79 @@ pub const ClusterStorage = struct {
         const file = try std.fs.cwd().createFile(path, .{});
         defer file.close();
 
-        var writer = file.writer();
+        // Use direct file I/O
 
         // Write header
-        try writer.writeAll(MAGIC);
-        try writer.writeInt(u32, VERSION, .little);
+        try file.writeAll(MAGIC);
+        try io_helpers.writeInt(file, u32, VERSION);
 
         // Write preflop clusters
-        try writer.writeInt(u32, @intCast(self.preflop_clusters.len), .little);
-        try writer.writeAll(self.preflop_clusters);
+        try io_helpers.writeInt(file, u32, @intCast(self.preflop_clusters.len));
+        try file.writeAll(self.preflop_clusters);
 
         // Write centroids
-        try self.writeCentroids(&writer, self.flop_centroids);
-        try self.writeCentroids(&writer, self.turn_centroids);
-        try self.writeCentroids(&writer, self.river_centroids);
+        try self.writeCentroids(file, self.flop_centroids);
+        try self.writeCentroids(file, self.turn_centroids);
+        try self.writeCentroids(file, self.river_centroids);
     }
 
     pub fn load(self: *Self, path: []const u8) !void {
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
 
-        var reader = file.reader();
-
         // Read and verify header
         var magic: [8]u8 = undefined;
-        _ = try reader.read(&magic);
+        _ = try file.read(&magic);
         if (!std.mem.eql(u8, &magic, MAGIC)) {
             return error.InvalidFileFormat;
         }
 
-        const version = try reader.readInt(u32, .little);
+        const version = try io_helpers.readInt(file, u32);
         if (version != VERSION) {
             return error.UnsupportedVersion;
         }
 
         // Read preflop clusters
-        const preflop_len = try reader.readInt(u32, .little);
+        const preflop_len = try io_helpers.readInt(file, u32);
         // Free existing allocation before creating new one
         if (self.preflop_clusters.len > 0) {
             self.allocator.free(self.preflop_clusters);
         }
         self.preflop_clusters = try self.allocator.alloc(u8, preflop_len);
-        _ = try reader.read(self.preflop_clusters);
+        _ = try file.read(self.preflop_clusters);
 
         // Read centroids (free existing allocations first)
         if (self.flop_centroids.len > 0) {
             self.allocator.free(self.flop_centroids);
         }
-        self.flop_centroids = try self.readCentroids(&reader);
+        self.flop_centroids = try self.readCentroids(file);
         
         if (self.turn_centroids.len > 0) {
             self.allocator.free(self.turn_centroids);
         }
-        self.turn_centroids = try self.readCentroids(&reader);
+        self.turn_centroids = try self.readCentroids(file);
         
         if (self.river_centroids.len > 0) {
             self.allocator.free(self.river_centroids);
         }
-        self.river_centroids = try self.readCentroids(&reader);
+        self.river_centroids = try self.readCentroids(file);
     }
 
-    fn writeCentroids(self: *Self, writer: anytype, centroids: []HandFeatures) !void {
+    fn writeCentroids(self: *Self, file: std.fs.File, centroids: []HandFeatures) !void {
         _ = self;
 
-        try writer.writeInt(u32, @intCast(centroids.len), .little);
+        try io_helpers.writeInt(file, u32, @intCast(centroids.len));
         for (centroids) |centroid| {
-            try writer.writeAll(std.mem.asBytes(&centroid));
+            try file.writeAll(std.mem.asBytes(&centroid));
         }
     }
 
-    fn readCentroids(self: *Self, reader: anytype) ![]HandFeatures {
-        const len = try reader.readInt(u32, .little);
+    fn readCentroids(self: *Self, file: std.fs.File) ![]HandFeatures {
+        const len = try io_helpers.readInt(file, u32);
         const centroids = try self.allocator.alloc(HandFeatures, len);
 
         for (centroids) |*centroid| {
-            _ = try reader.read(std.mem.asBytes(centroid));
+            _ = try file.read(std.mem.asBytes(centroid));
         }
 
         return centroids;

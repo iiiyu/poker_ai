@@ -269,7 +269,7 @@ pub const ELOCalculator = struct {
 
     pub fn calculateRatingChanges(player_ratings: []f64, results: []f64) void {
         const n = player_ratings.len;
-        var new_ratings = std.ArrayList(f64).init(std.heap.page_allocator);
+        var new_ratings = try std.ArrayList(f64).initCapacity(std.heap.page_allocator, 0);
         defer new_ratings.deinit();
 
         new_ratings.appendSlice(player_ratings) catch return;
@@ -338,17 +338,17 @@ pub const Tournament = struct {
             .initial_stack = initial_stack,
             .blind_schedule = try BlindSchedule.init(allocator, blind_levels),
             .payout_structure = null,
-            .players = std.ArrayList(player.Player).init(allocator),
-            .eliminated_players = std.ArrayList(PlayerId).init(allocator),
+            .players = try std.ArrayList(player.Player).initCapacity(allocator, 0),
+            .eliminated_players = try std.ArrayList(PlayerId).initCapacity(allocator, 0),
             .current_hand = 0,
             .total_prize_pool = 0,
             .player_stats = std.HashMap(PlayerId, PlayerStats, std.hash_map.AutoContext(PlayerId), 80).init(allocator),
-            .hand_history = std.ArrayList(HandRecord).init(allocator),
+            .hand_history = try std.ArrayList(HandRecord).initCapacity(allocator, 0),
             .allocator = allocator,
             .rng = rng,
         };
 
-        try tournament.players.ensureTotalCapacity(max_players);
+        try tournament.players.ensureTotalCapacity(allocator, max_players);
         return tournament;
     }
 
@@ -357,15 +357,15 @@ pub const Tournament = struct {
         if (self.payout_structure) |*payout| {
             payout.deinit();
         }
-        self.players.deinit();
-        self.eliminated_players.deinit();
+        self.players.deinit(self.allocator);
+        self.eliminated_players.deinit(self.allocator);
         self.player_stats.deinit();
 
         // Clean up hand history
         for (self.hand_history.items) |*record| {
             record.deinit();
         }
-        self.hand_history.deinit();
+        self.hand_history.deinit(self.allocator);
     }
 
     /// Add a player to the tournament
@@ -375,7 +375,7 @@ pub const Tournament = struct {
         }
 
         const new_player = player.Player.init(player_id, self.initial_stack);
-        try self.players.append(new_player);
+        try self.players.append(self.allocator, new_player);
 
         const stats = PlayerStats.init(player_id, self.initial_stack, elo_rating);
         try self.player_stats.put(player_id, stats);
@@ -458,7 +458,7 @@ pub const Tournament = struct {
         const pot_size = blinds.small_blind + blinds.big_blind; // Simplified
 
         hand_record.finalize(winner_id, pot_size, &[_]Card{}, false);
-        try self.hand_history.append(hand_record);
+        try self.hand_history.append(self.allocator, hand_record);
 
         // Update statistics
         self.updatePlayerStatistics(winner_id, pot_size);

@@ -319,27 +319,27 @@ pub const StringUtils = struct {
     pub fn cardsToString(allocator: std.mem.Allocator, cards: []const u8) ![]u8 {
         if (cards.len == 0) return try allocator.dupe(u8, "");
 
-        var result = std.ArrayList(u8).init(allocator);
-        defer result.deinit();
+        var result = try std.ArrayList(u8).initCapacity(allocator, 0);
+        defer result.deinit(allocator);
 
         const ranks = "23456789TJQKA";
         const suits = "cdhs";
 
         for (cards, 0..) |card, i| {
-            if (i > 0) try result.append(' ');
+            if (i > 0) try result.append(allocator, ' ');
 
             const rank = card >> 2;
             const suit = card & 3;
 
             if (rank < ranks.len and suit < suits.len) {
-                try result.append(ranks[rank]);
-                try result.append(suits[suit]);
+                try result.append(allocator, ranks[rank]);
+                try result.append(allocator, suits[suit]);
             } else {
-                try result.appendSlice("??");
+                try result.appendSlice(allocator, "??");
             }
         }
 
-        return result.toOwnedSlice();
+        return result.toOwnedSlice(allocator);
     }
 
     // Parse card from string (e.g., "As" -> ace of spades)
@@ -432,7 +432,7 @@ test "performance utilities" {
     const testing = std.testing;
 
     var timer = PerfUtils.Timer.start();
-    std.time.sleep(1000000); // 1ms
+    std.Thread.sleep(1000000); // 1ms
     const elapsed = timer.elapsedUs();
     try testing.expect(elapsed >= 900); // Should be at least 900us
 

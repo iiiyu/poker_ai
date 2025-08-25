@@ -165,17 +165,17 @@ pub const ActionValidator = struct {
     ) ![]ActionType {
         _ = all_players;
 
-        var legal_actions = std.ArrayList(ActionType).init(self.allocator);
+        var legal_actions = try std.ArrayList(ActionType).initCapacity(self.allocator, 0);
         // Don't defer deinit here - toOwnedSlice() transfers ownership to caller
 
         if (!target_player.canAct()) {
             // Return an empty owned slice for consistency
-            return legal_actions.toOwnedSlice();
+            return legal_actions.toOwnedSlice(self.allocator);
         }
 
         // Fold is always legal (except when already all-in)
         if (!target_player.is_all_in) {
-            try legal_actions.append(.fold);
+            try legal_actions.append(self.allocator, .fold);
         }
 
         const call_amount = self.calculateCallAmount(target_player, betting_manager);
@@ -183,25 +183,25 @@ pub const ActionValidator = struct {
 
         // Check if player can check
         if (call_amount == 0) {
-            try legal_actions.append(.check);
+            try legal_actions.append(self.allocator, .check);
         }
 
         // Check if player can call
         if (call_amount > 0 and target_player.canCall(call_amount)) {
-            try legal_actions.append(.call);
+            try legal_actions.append(self.allocator, .call);
         }
 
         // Check if player can raise
         if (!betting_manager.areRaisesCapped() and target_player.canRaise(min_raise)) {
-            try legal_actions.append(.raise);
+            try legal_actions.append(self.allocator, .raise);
         }
 
         // All-in is always legal if player has chips
         if (target_player.stack > 0) {
-            try legal_actions.append(.all_in);
+            try legal_actions.append(self.allocator, .all_in);
         }
 
-        return legal_actions.toOwnedSlice();
+        return legal_actions.toOwnedSlice(self.allocator);
     }
 
     /// Validate fold action
@@ -401,7 +401,7 @@ pub const ActionValidator = struct {
         pot_size: ChipAmount,
         config: GameConfig,
     ) ![]ActionType {
-        var suggestions = std.ArrayList(ActionType).init(self.allocator);
+        var suggestions = try std.ArrayList(ActionType).initCapacity(self.allocator, 0);
         defer suggestions.deinit();
 
         const call_amount = self.calculateCallAmount(target_player, betting_manager);
@@ -410,22 +410,22 @@ pub const ActionValidator = struct {
         // Basic strategy suggestions based on pot odds
         if (pot_odds > 3.0) { // Good pot odds
             if (call_amount > 0) {
-                try suggestions.append(.call);
+                try suggestions.append(self.allocator, .call);
             } else {
-                try suggestions.append(.check);
+                try suggestions.append(self.allocator, .check);
             }
         }
 
         if (target_player.stack > config.big_blind * 10) { // Deep stack
             if (!betting_manager.areRaisesCapped()) {
-                try suggestions.append(.raise);
+                try suggestions.append(self.allocator, .raise);
             }
         }
 
         // Always suggest fold as an option
-        try suggestions.append(.fold);
+        try suggestions.append(self.allocator, .fold);
 
-        return suggestions.toOwnedSlice();
+        return suggestions.toOwnedSlice(self.allocator);
     }
 
     /// Check if action sequence indicates aggressive play

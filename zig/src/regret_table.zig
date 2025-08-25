@@ -249,7 +249,8 @@ pub const RegretTable = struct {
         const file = try std.fs.cwd().createFile(path, .{});
         defer file.close();
 
-        var buffered = std.io.bufferedWriter(file.writer());
+        var buffer: [8192]u8 = undefined;
+        var buffered = std.io.bufferedWriter(file.writer(&buffer));
         const writer = buffered.writer();
 
         // Write header
@@ -287,7 +288,7 @@ pub const RegretTable = struct {
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
 
-        var buffered = std.io.bufferedReader(file.reader());
+        var buffered = std.io.bufferedReader(file.reader(undefined));
         const reader = buffered.reader();
 
         // Read header

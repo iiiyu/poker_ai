@@ -108,7 +108,7 @@ pub fn computeInfoSetHash(game: *game_state.GameState, player: u8) !HashType {
 
 // Abstract action sequence for dimensionality reduction
 fn abstractActionSequence(game: *game_state.GameState) ![]u8 {
-    var abstract = std.ArrayList(u8).init(game.allocator);
+    var abstract = try std.ArrayList(u8).initCapacity(game.allocator, 0);
 
     // Convert action sequence to abstract representation
     // F = Fold, C = Call/Check, R = Raise (small), B = Big raise, A = All-in
@@ -130,10 +130,10 @@ fn abstractActionSequence(game: *game_state.GameState) ![]u8 {
             },
             .all_in => 'A',
         };
-        try abstract.append(abstract_action);
+        try abstract.append(game.allocator, abstract_action);
     }
 
-    return abstract.toOwnedSlice();
+    return abstract.toOwnedSlice(game.allocator);
 }
 
 // Bucket pot sizes for abstraction

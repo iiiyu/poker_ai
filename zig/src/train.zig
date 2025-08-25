@@ -2,7 +2,7 @@
 //! Implements full Monte Carlo CFR with Linear CFR improvements
 
 const std = @import("std");
-const poker_ai = @import("main.zig");
+const io_helpers = @import("io_helpers.zig");const poker_ai = @import("main.zig");
 const game_state = @import("game_state.zig");
 const linear_cfr = @import("linear_cfr.zig");
 const game_tree = @import("game_tree.zig");
@@ -233,32 +233,32 @@ fn saveStrategy(trainer: *LinearCFRTrainer, path: []const u8) !void {
     const file = try std.fs.cwd().createFile(path, .{});
     defer file.close();
     
-    var writer = file.writer();
+        // Use direct file I/O
     
     // Write header
-    try writer.writeAll("POKERSTRAT");
-    try writer.writeInt(u32, 1, .little); // Version
-    try writer.writeInt(u32, @intCast(trainer.infoset_map.count()), .little);
+    try file.writeAll("POKERSTRAT");
+    try io_helpers.writeInt(file, u32, 1); // Version
+    try io_helpers.writeInt(file, u32, @intCast(trainer.infoset_map.count()));
     
     // Write each information set
     var iter = trainer.infoset_map.iterator();
     while (iter.next()) |entry| {
         // Write key
-        try writer.writeInt(u64, entry.key_ptr.*, .little);
+        try io_helpers.writeInt(file, u64, entry.key_ptr.*);
         
         // Write data
         const data = entry.value_ptr;
-        try writer.writeInt(u32, @intCast(data.strategy.len), .little);
+        try io_helpers.writeInt(file, u32, @intCast(data.strategy.len));
         
         // Write average strategy
         const avg_strategy = data.getAverageStrategy();
         for (avg_strategy) |prob| {
-            try writer.writeAll(std.mem.asBytes(&prob));
+            try file.writeAll(std.mem.asBytes(&prob));
         }
         
         // Write metadata
-        try writer.writeInt(u32, data.visits, .little);
-        try writer.writeInt(u32, data.last_update, .little);
+        try io_helpers.writeInt(file, u32, data.visits);
+        try io_helpers.writeInt(file, u32, data.last_update);
     }
 }
 
@@ -267,40 +267,38 @@ pub fn loadStrategy(allocator: std.mem.Allocator, path: []const u8) !LinearCFRTr
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
     
-    var reader = file.reader();
-    
     // Read and verify header
     var magic: [10]u8 = undefined;
-    _ = try reader.read(&magic);
+    _ = try file.read(&magic);
     if (!std.mem.eql(u8, &magic, "POKERSTRAT")) {
         return error.InvalidStrategyFile;
     }
     
-    const version = try reader.readInt(u32, .little);
+    const version = try io_helpers.readInt(file, u32);
     if (version != 1) {
         return error.UnsupportedVersion;
     }
     
-    const num_infosets = try reader.readInt(u32, .little);
+    const num_infosets = try io_helpers.readInt(file, u32);
     
     // Create trainer
     var trainer = try LinearCFRTrainer.init(allocator, .{});
     
     // Read information sets
     for (0..num_infosets) |_| {
-        const key = try reader.readInt(u64, .little);
-        const num_actions = try reader.readInt(u32, .little);
+        const key = try io_helpers.readInt(file, u64);
+        const num_actions = try io_helpers.readInt(file, u32);
         
         var data = try linear_cfr.InfoSetData.init(allocator, num_actions);
         
         // Read strategy
         for (data.strategy_sum) |*prob| {
-            _ = try reader.read(std.mem.asBytes(prob));
+            _ = try file.read(std.mem.asBytes(prob));
         }
         
         // Read metadata
-        data.visits = try reader.readInt(u32, .little);
-        data.last_update = try reader.readInt(u32, .little);
+        data.visits = try io_helpers.readInt(file, u32);
+        data.last_update = try io_helpers.readInt(file, u32);
         
         try trainer.infoset_map.put(key, data);
     }

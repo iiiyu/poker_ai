@@ -195,7 +195,7 @@ pub const TexasHoldemGameEngine = struct {
             .betting_manager = betting.BettingManager.init(),
             .action_validator = action_validator.ActionValidator.initWithAllocator(allocator),
             .config = config,
-            .action_history = std.ArrayList(Action).init(allocator),
+            .action_history = std.ArrayList(Action){},
             .is_terminal = false,
             .allocator = allocator,
         };
@@ -221,7 +221,7 @@ pub const TexasHoldemGameEngine = struct {
 
     pub fn deinit(self: *Self) void {
         self.pot_manager.deinit();
-        self.action_history.deinit();
+        self.action_history.deinit(self.allocator);
     }
 
     /// Start a new hand (reset for next hand)
@@ -365,7 +365,7 @@ pub const TexasHoldemGameEngine = struct {
         }
 
         // Record action in history
-        try self.action_history.append(action);
+        try self.action_history.append(self.allocator, action);
 
         // Update betting manager
         self.betting_manager.recordAction(.{
@@ -418,29 +418,29 @@ pub const TexasHoldemGameEngine = struct {
 
     /// Get information set string for given player (for MCCFR)
     pub fn getInfoSet(self: Self, player_id: PlayerId) ![]u8 {
-        var info_set = std.ArrayList(u8).init(self.allocator);
-        errdefer info_set.deinit();
+        var info_set = try std.ArrayList(u8).initCapacity(self.allocator, 0);
+        errdefer info_set.deinit(self.allocator);
 
         const target_player = &self.players[player_id];
 
         // Add hole cards
-        try info_set.append(target_player.hole_cards[0]);
-        try info_set.append(target_player.hole_cards[1]);
+        try info_set.append(self.allocator, target_player.hole_cards[0]);
+        try info_set.append(self.allocator, target_player.hole_cards[1]);
 
         // Add community cards
         for (self.board[0..self.board_size]) |card| {
-            try info_set.append(card);
+            try info_set.append(self.allocator, card);
         }
 
         // Add betting stage
-        try info_set.append(@intFromEnum(self.betting_stage));
+        try info_set.append(self.allocator, @intFromEnum(self.betting_stage));
 
         // Add compressed action history
         for (self.action_history.items) |action| {
-            try info_set.append(@intFromEnum(action.action_type));
+            try info_set.append(self.allocator, @intFromEnum(action.action_type));
         }
 
-        return info_set.toOwnedSlice();
+        return info_set.toOwnedSlice(self.allocator);
     }
 
     /// Get current pot size

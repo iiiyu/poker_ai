@@ -168,6 +168,9 @@ pub const GameState = struct {
     const Self = @This();
 
     pub fn init(allocator: std.mem.Allocator, num_players: u8, small_blind: u32, big_blind: u32) !Self {
+        const actions = try std.ArrayList(Action).initCapacity(allocator, 0);
+        const action_sequence = try std.ArrayList(u8).initCapacity(allocator, 0);
+        
         var state = Self{
             .players = undefined,
             .num_players = num_players,
@@ -184,8 +187,8 @@ pub const GameState = struct {
             .pot = 0,
             .current_bet = 0,
             .last_raiser = null,
-            .actions = std.ArrayList(Action).init(allocator),
-            .action_sequence = std.ArrayList(u8).init(allocator),
+            .actions = actions,
+            .action_sequence = action_sequence,
             .allocator = allocator,
             .legal_actions_buffer = undefined,
             .legal_actions_count = 0,
@@ -205,8 +208,8 @@ pub const GameState = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.actions.deinit();
-        self.action_sequence.deinit();
+        self.actions.deinit(self.allocator);
+        self.action_sequence.deinit(self.allocator);
     }
 
     // Post blinds to start the betting round
@@ -298,8 +301,8 @@ pub const GameState = struct {
         }
 
         // Record action
-        try self.actions.append(action);
-        try self.action_sequence.append(@intFromEnum(action.action_type));
+        try self.actions.append(self.allocator, action);
+        try self.action_sequence.append(self.allocator, @intFromEnum(action.action_type));
 
         // Move to next player
         self.advanceToNextPlayer();
@@ -364,26 +367,26 @@ pub const GameState = struct {
 
     // Get information set string for current player
     pub fn getInfoSet(self: Self, player_id: u8) ![]u8 {
-        var info_set = std.ArrayList(u8).init(self.allocator);
-        defer info_set.deinit();
+        var info_set = try std.ArrayList(u8).initCapacity(self.allocator, 0);
+        defer info_set.deinit(self.allocator);
 
         const player = &self.players[player_id];
 
         // Add hole cards
-        try info_set.append(player.hand.cards[0]);
-        try info_set.append(player.hand.cards[1]);
+        try info_set.append(self.allocator, player.hand.cards[0]);
+        try info_set.append(self.allocator, player.hand.cards[1]);
 
         // Add board cards
         for (self.board[0..self.board_size]) |card| {
-            try info_set.append(card);
+            try info_set.append(self.allocator, card);
         }
 
         // Add action sequence
         for (self.action_sequence.items) |action| {
-            try info_set.append(action);
+            try info_set.append(self.allocator, action);
         }
 
-        return info_set.toOwnedSlice();
+        return info_set.toOwnedSlice(self.allocator);
     }
 
     // Helper functions
@@ -480,8 +483,8 @@ pub const GameState = struct {
             .pot = self.pot,
             .current_bet = self.current_bet,
             .last_raiser = self.last_raiser,
-            .actions = try self.actions.clone(),
-            .action_sequence = try self.action_sequence.clone(),
+            .actions = try self.actions.clone(self.allocator),
+            .action_sequence = try self.action_sequence.clone(self.allocator),
             .allocator = self.allocator,
             .legal_actions_buffer = self.legal_actions_buffer,
             .legal_actions_count = self.legal_actions_count,

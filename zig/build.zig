@@ -5,11 +5,14 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // Main library
-    const lib = b.addStaticLibrary(.{
+    const lib = b.addLibrary(.{
         .name = "poker_ai",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     // Link required libraries
@@ -22,11 +25,14 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     // Shared library for Python FFI
-    const shared_lib = b.addSharedLibrary(.{
+    const shared_lib = b.addLibrary(.{
         .name = "poker_ai",
-        .root_source_file = b.path("src/c_api.zig"),
-        .target = target,
-        .optimize = optimize,
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/c_api.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     
     shared_lib.linkLibC();
@@ -38,9 +44,11 @@ pub fn build(b: *std.Build) void {
     // Example executable
     const exe = b.addExecutable(.{
         .name = "poker_ai_demo",
-        .root_source_file = b.path("src/demo.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/demo.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     
     exe.root_module.addImport("poker_ai", lib.root_module);
@@ -63,9 +71,11 @@ pub fn build(b: *std.Build) void {
     // Clustering demo executable
     const clustering_demo = b.addExecutable(.{
         .name = "clustering_demo",
-        .root_source_file = b.path("examples/clustering_demo.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/clustering_demo.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     
     clustering_demo.root_module.addImport("poker_ai", lib.root_module);
@@ -83,9 +93,11 @@ pub fn build(b: *std.Build) void {
     // Tournament demo executable
     const tournament_demo = b.addExecutable(.{
         .name = "tournament_demo",
-        .root_source_file = b.path("examples/tournament_demo.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/tournament_demo.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     
     tournament_demo.root_module.addImport("poker_ai", lib.root_module);
@@ -103,9 +115,11 @@ pub fn build(b: *std.Build) void {
     // Interactive poker game executable
     const play_poker = b.addExecutable(.{
         .name = "play_poker",
-        .root_source_file = b.path("examples/play_poker.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/play_poker.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     
     play_poker.root_module.addImport("poker_ai", lib.root_module);
@@ -127,9 +141,11 @@ pub fn build(b: *std.Build) void {
     // Training executable
     const train_exe = b.addExecutable(.{
         .name = "train",
-        .root_source_file = b.path("src/train.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/train.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     
     train_exe.root_module.addImport("poker_ai", lib.root_module);
@@ -150,9 +166,11 @@ pub fn build(b: *std.Build) void {
 
     // Unit tests
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     
     lib_unit_tests.linkLibC();
@@ -175,9 +193,11 @@ pub fn build(b: *std.Build) void {
     
     for (test_files) |test_file| {
         const test_exe = b.addTest(.{
-            .root_source_file = b.path(test_file),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(test_file),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
         
         test_exe.root_module.addImport("poker_ai", lib.root_module);
@@ -191,9 +211,11 @@ pub fn build(b: *std.Build) void {
     // Benchmarks
     const bench = b.addExecutable(.{
         .name = "poker_ai_bench",
-        .root_source_file = b.path("bench/main.zig"),
-        .target = target,
-        .optimize = .ReleaseFast, // Always optimize benchmarks
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("bench/main.zig"),
+            .target = target,
+            .optimize = .ReleaseFast, // Always optimize benchmarks
+        }),
     });
     
     bench.root_module.addImport("poker_ai", lib.root_module);

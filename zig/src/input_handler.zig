@@ -185,7 +185,7 @@ pub const InputHandler = struct {
             }
 
             // Small delay to prevent busy waiting
-            std.time.sleep(10 * std.time.ns_per_ms);
+            std.Thread.sleep(10 * std.time.ns_per_ms);
         }
     }
 
@@ -307,7 +307,7 @@ pub const InputHandler = struct {
             if (try self.readChar()) |_| {
                 break;
             }
-            std.time.sleep(50 * std.time.ns_per_ms); // 50ms delay
+            std.Thread.sleep(50 * std.time.ns_per_ms); // 50ms delay
         }
     }
 
@@ -524,7 +524,7 @@ pub const InputHandler = struct {
                     else => continue,
                 }
             }
-            std.time.sleep(10 * std.time.ns_per_ms);
+            std.Thread.sleep(10 * std.time.ns_per_ms);
         }
     }
 };
@@ -539,19 +539,19 @@ pub fn isActionAvailable(action: ActionType, available_actions: []const ActionTy
 
 /// Get available actions based on game state
 pub fn getAvailableActions(allocator: std.mem.Allocator, can_check: bool, can_call: bool, can_raise: bool, can_fold: bool) ![]ActionType {
-    var actions = std.ArrayList(ActionType).init(allocator);
+    var actions = try std.ArrayList(ActionType).initCapacity(allocator, 0);
     defer actions.deinit();
 
-    if (can_fold) try actions.append(.fold);
-    if (can_check) try actions.append(.check);
-    if (can_call) try actions.append(.call);
+    if (can_fold) try actions.append(allocator, .fold);
+    if (can_check) try actions.append(allocator, .check);
+    if (can_call) try actions.append(allocator, .call);
     if (can_raise) {
-        try actions.append(.raise);
-        try actions.append(.all_in);
+        try actions.append(allocator, .raise);
+        try actions.append(allocator, .all_in);
     }
-    try actions.append(.quit);
+    try actions.append(allocator, .quit);
 
-    return actions.toOwnedSlice();
+    return actions.toOwnedSlice(allocator);
 }
 
 // Unit tests

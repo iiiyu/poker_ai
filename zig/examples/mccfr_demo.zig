@@ -77,7 +77,7 @@ const SimplePoker = struct {
     }
 
     pub fn applyAction(self: *SimplePoker, action: Action) !void {
-        try self.history.append(action);
+        try self.history.append(allocator, action);
 
         if (action == .bet) {
             self.pot[self.current_player] += 1;
@@ -97,7 +97,7 @@ const SimplePoker = struct {
             .mid => 'M',
             .high => 'H',
         };
-        try buffer.append(card_char);
+        try buffer.append(allocator, card_char);
 
         // Add action history
         for (self.history.items) |action| {
@@ -107,7 +107,7 @@ const SimplePoker = struct {
                 .bet => 'b',
                 .call => 'c',
             };
-            try buffer.append(action_char);
+            try buffer.append(allocator, action_char);
         }
 
         return buffer.toOwnedSlice();

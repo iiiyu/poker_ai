@@ -236,8 +236,8 @@ test "mccfr game state cloning" {
     
     original.pot = 100;
     original.current_bet = 50;
-    try original.action_sequence.append(1);
-    try original.action_sequence.append(2);
+    try original.action_sequence.append(allocator, 1);
+    try original.action_sequence.append(allocator, 2);
     
     // Clone the game
     var clone = try trainer.cloneGameState(&original);

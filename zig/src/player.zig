@@ -217,26 +217,26 @@ pub const Player = struct {
 
     /// Get readable status string
     pub fn getStatus(self: Self, allocator: std.mem.Allocator) ![]u8 {
-        var status_parts = std.ArrayList([]const u8).init(allocator);
+        var status_parts = try std.ArrayList([]const u8).initCapacity(allocator, 0);
         defer status_parts.deinit();
 
         if (!self.is_active) {
-            try status_parts.append("FOLDED");
+            try status_parts.append(allocator, "FOLDED");
         } else if (self.is_all_in) {
-            try status_parts.append("ALL-IN");
+            try status_parts.append(allocator, "ALL-IN");
         } else if (self.is_sitting_out) {
-            try status_parts.append("SITTING_OUT");
+            try status_parts.append(allocator, "SITTING_OUT");
         } else {
-            try status_parts.append("ACTIVE");
+            try status_parts.append(allocator, "ACTIVE");
         }
 
-        if (self.is_dealer) try status_parts.append("DEALER");
-        if (self.is_small_blind) try status_parts.append("SB");
-        if (self.is_big_blind) try status_parts.append("BB");
-        if (self.is_turn) try status_parts.append("TURN");
+        if (self.is_dealer) try status_parts.append(allocator, "DEALER");
+        if (self.is_small_blind) try status_parts.append(allocator, "SB");
+        if (self.is_big_blind) try status_parts.append(allocator, "BB");
+        if (self.is_turn) try status_parts.append(allocator, "TURN");
 
         // Join status parts with "|"
-        var result = std.ArrayList(u8).init(allocator);
+        var result = try std.ArrayList(u8).initCapacity(allocator, 0);
         defer result.deinit();
 
         for (status_parts.items, 0..) |part, i| {
@@ -244,7 +244,7 @@ pub const Player = struct {
             try result.appendSlice(part);
         }
 
-        return result.toOwnedSlice();
+        return result.toOwnedSlice(allocator);
     }
 
     /// Compare players by position for betting order

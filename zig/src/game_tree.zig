@@ -2,7 +2,7 @@
 //! Provides cache-efficient tree traversal with work-stealing support
 
 const std = @import("std");
-const game_state = @import("game_state.zig");
+const io_helpers = @import("io_helpers.zig");const game_state = @import("game_state.zig");
 const GameState = game_state.GameState;
 const Action = game_state.Action;
 const Round = game_state.Round;
@@ -86,7 +86,7 @@ pub const WorkQueue = struct {
     pub fn push(self: *Self, item: WorkItem) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        try self.items.append(item);
+        try self.items.append(self.allocator, item);
     }
     
     pub fn trySteal(self: *Self) ?WorkItem {
@@ -182,7 +182,7 @@ pub const GameTree = struct {
         // Create root node
         const root_node = try self.createNode(initial_state, 0);
         self.root_idx = @intCast(self.nodes.items.len);
-        try self.nodes.append(root_node);
+        try self.nodes.append(self.allocator, root_node);
         
         // Build tree recursively with depth limit
         try self.expandNode(self.root_idx, initial_state, max_depth);
@@ -243,7 +243,7 @@ pub const GameTree = struct {
             // Create child node
             const child_node = try self.createNode(&next_state, node.depth + 1);
             const child_idx = @as(u32, @intCast(self.nodes.items.len));
-            try self.nodes.append(child_node);
+            try self.nodes.append(self.allocator, child_node);
             
             // Create edge
             const edge = ActionEdge{
@@ -253,7 +253,7 @@ pub const GameTree = struct {
                 .regret = 0.0,
                 .strategy_sum = 0.0,
             };
-            try self.edges.append(edge);
+            try self.edges.append(self.allocator, edge);
             
             // Recursively expand child
             try self.expandNode(child_idx, &next_state, max_depth);
@@ -284,7 +284,7 @@ pub const GameTree = struct {
     
     /// Parallel traversal with work stealing
     pub fn parallelTraverse(self: *Self, visitor: *Visitor, num_threads: u32) !void {
-        var thread_pool = std.ArrayList(std.Thread).init(self.allocator);
+        var thread_pool = try std.ArrayList(std.Thread).initCapacity(self.allocator, 0);
         defer thread_pool.deinit();
         
         // Create work queues
@@ -315,7 +315,7 @@ pub const GameTree = struct {
                 &work_queues[tid],
                 work_queues,
             });
-            try thread_pool.append(thread);
+            try thread_pool.append(self.allocator, thread);
         }
         
         // Wait for completion
@@ -362,7 +362,7 @@ pub const GameTree = struct {
                 }
                 
                 // Brief sleep to avoid busy waiting
-                std.time.sleep(1000); // 1 microsecond
+                std.Thread.sleep(1000); // 1 microsecond
             }
         }
     }
@@ -431,28 +431,28 @@ pub const GameTree = struct {
         const file = try std.fs.cwd().createFile(path, .{});
         defer file.close();
         
-        var writer = file.writer();
+        // Use direct file I/O
         
         // Write header
-        try writer.writeAll("GAMETREE");
-        try writer.writeInt(u32, 1, .little); // Version
+        try file.writeAll("GAMETREE");
+        try io_helpers.writeInt(file, u32, 1); // Version
         
         // Write statistics
-        try writer.writeStruct(self.stats);
+        try file.writeAll(std.mem.asBytes(&self.stats));
         
         // Write nodes
-        try writer.writeInt(u32, @intCast(self.nodes.items.len), .little);
+        try io_helpers.writeInt(file, u32, @intCast(self.nodes.items.len));
         for (self.nodes.items) |node| {
-            try writer.writeStruct(node);
+            try file.writeAll(std.mem.asBytes(&node));
         }
         
         // Write edges
-        try writer.writeInt(u32, @intCast(self.edges.items.len), .little);
+        try io_helpers.writeInt(file, u32, @intCast(self.edges.items.len));
         for (self.edges.items) |edge| {
-            try writer.writeStruct(edge);
+            try file.writeAll(std.mem.asBytes(&edge));
         }
         
-        try writer.writeInt(u32, self.root_idx, .little);
+        try io_helpers.writeInt(file, u32, self.root_idx);
     }
     
     /// Load tree from disk
@@ -460,42 +460,42 @@ pub const GameTree = struct {
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
         
-        var reader = file.reader();
-        
         // Read and verify header
         var magic: [8]u8 = undefined;
-        _ = try reader.read(&magic);
+        _ = try file.read(&magic);
         if (!std.mem.eql(u8, &magic, "GAMETREE")) {
             return error.InvalidFileFormat;
         }
         
-        const version = try reader.readInt(u32, .little);
+        const version = try io_helpers.readInt(file, u32);
         if (version != 1) {
             return error.UnsupportedVersion;
         }
         
         // Read statistics
-        self.stats = try reader.readStruct(TreeStats);
+        _ = try file.read(std.mem.asBytes(&self.stats));
         
         // Read nodes
-        const num_nodes = try reader.readInt(u32, .little);
+        const num_nodes = try io_helpers.readInt(file, u32);
         try self.nodes.ensureTotalCapacity(num_nodes);
         
         for (0..num_nodes) |_| {
-            const node = try reader.readStruct(GameNode);
-            try self.nodes.append(node);
+            var node: GameNode = undefined;
+            _ = try file.read(std.mem.asBytes(&node));
+            try self.nodes.append(self.allocator, node);
         }
         
         // Read edges
-        const num_edges = try reader.readInt(u32, .little);
+        const num_edges = try io_helpers.readInt(file, u32);
         try self.edges.ensureTotalCapacity(num_edges);
         
         for (0..num_edges) |_| {
-            const edge = try reader.readStruct(ActionEdge);
-            try self.edges.append(edge);
+            var edge: ActionEdge = undefined;
+            _ = try file.read(std.mem.asBytes(&edge));
+            try self.edges.append(self.allocator, edge);
         }
         
-        self.root_idx = try reader.readInt(u32, .little);
+        self.root_idx = try io_helpers.readInt(file, u32);
     }
 };
 

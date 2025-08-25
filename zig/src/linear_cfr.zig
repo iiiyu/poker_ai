@@ -502,8 +502,8 @@ pub const LinearCFRTrainer = struct {
             score: f32, // Lower score = more likely to remove
         };
         
-        var candidates = std.ArrayList(RemovalCandidate).init(self.allocator);
-        defer candidates.deinit();
+        var candidates = try std.ArrayList(RemovalCandidate).initCapacity(self.allocator, 0);
+        defer candidates.deinit(self.allocator);
         
         var iter = self.infoset_map.iterator();
         while (iter.next()) |entry| {
@@ -525,7 +525,7 @@ pub const LinearCFRTrainer = struct {
                                    (infoset.visits < min_visits_threshold);
             
             if (should_consider) {
-                try candidates.append(.{
+                try candidates.append(self.allocator, .{
                     .key = entry.key_ptr.*,
                     .score = removal_score,
                 });

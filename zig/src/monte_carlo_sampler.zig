@@ -109,7 +109,7 @@ pub const MonteCarloSampler = struct {
 
     // Get available actions with sampling
     pub fn getAvailableActions(self: *Self, game: *game_state.GameState) ![]game_state.Action {
-        var actions = std.ArrayList(game_state.Action).init(self.allocator);
+        var actions = try std.ArrayList(game_state.Action).initCapacity(self.allocator, 0);
 
         const current_bet = game.current_bet;
         const player = &game.players[game.current_player];
@@ -118,18 +118,18 @@ pub const MonteCarloSampler = struct {
 
         // Always include fold (except when checking is free)
         if (current_bet > player_bet) {
-            try actions.append(game_state.Action.fold());
+            try actions.append(self.allocator, game_state.Action.fold());
         }
 
         // Check or call
         if (current_bet == player_bet) {
-            try actions.append(game_state.Action.check());
+            try actions.append(self.allocator, game_state.Action.check());
         } else {
             const call_amount = @min(current_bet - player_bet, player_stack);
             if (call_amount == player_stack) {
-                try actions.append(game_state.Action.allIn(player_stack + player_bet));
+                try actions.append(self.allocator, game_state.Action.allIn(player_stack + player_bet));
             } else {
-                try actions.append(game_state.Action.call());
+                try actions.append(self.allocator, game_state.Action.call());
             }
         }
 
@@ -146,9 +146,9 @@ pub const MonteCarloSampler = struct {
 
                     if (raise_amount >= min_raise and raise_amount <= max_raise) {
                         if (raise_amount == max_raise) {
-                            try actions.append(game_state.Action.allIn(max_raise));
+                            try actions.append(self.allocator, game_state.Action.allIn(max_raise));
                         } else {
-                            try actions.append(game_state.Action.raise(raise_amount));
+                            try actions.append(self.allocator, game_state.Action.raise(raise_amount));
                         }
                     }
                 }
@@ -159,18 +159,18 @@ pub const MonteCarloSampler = struct {
                     const raise_amount = @as(u32, @intFromFloat(@as(f32, @floatFromInt(game.pot)) * fraction)) + current_bet;
 
                     if (raise_amount >= min_raise and raise_amount < max_raise) {
-                        try actions.append(game_state.Action.raise(raise_amount));
+                        try actions.append(self.allocator, game_state.Action.raise(raise_amount));
                     }
                 }
 
                 // Always include all-in as option
                 if (max_raise > min_raise) {
-                    try actions.append(game_state.Action.allIn(max_raise));
+                    try actions.append(self.allocator, game_state.Action.allIn(max_raise));
                 }
             }
         }
 
-        return actions.toOwnedSlice();
+        return actions.toOwnedSlice(self.allocator);
     }
 
     // Sample action with epsilon exploration
@@ -364,7 +364,7 @@ pub const AdvancedSampler = struct {
 
         const uniform_weight = 1.0 / @as(f32, @floatFromInt(num_strata));
         for (0..num_strata) |i| {
-            try self.strata.append(.{
+            try self.strata.append(self.allocator, .{
                 .id = @intCast(i),
                 .weight = uniform_weight,
                 .samples = 0,

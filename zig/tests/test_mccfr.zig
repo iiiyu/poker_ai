@@ -60,7 +60,7 @@ const KuhnPoker = struct {
             };
             
             for (self.history.items) |action| {
-                try new_state.history.append(action);
+                try new_state.history.append(allocator, action);
             }
             
             return new_state;
@@ -159,7 +159,7 @@ const KuhnPoker = struct {
         }
         
         pub fn applyAction(self: *State, action: Action) !void {
-            try self.history.append(action);
+            try self.history.append(allocator, action);
             
             // Update current player
             if (self.current_player == .player1) {
@@ -184,7 +184,7 @@ const KuhnPoker = struct {
                 .queen => 'Q',
                 .king => 'K',
             };
-            try buffer.append(card_char);
+            try buffer.append(allocator, card_char);
             
             // Add action history
             for (self.history.items) |action| {
@@ -194,7 +194,7 @@ const KuhnPoker = struct {
                     .fold => 'f',
                     .call => 'c',
                 };
-                try buffer.append(action_char);
+                try buffer.append(allocator, action_char);
             }
             
             return buffer.toOwnedSlice();

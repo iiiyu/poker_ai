@@ -341,11 +341,11 @@ fn createRandomGameLocal(allocator: std.mem.Allocator, rng: *std.Random.DefaultP
     var game = try game_state.GameState.init(allocator, 2, 5, 10);
 
     // Create and shuffle deck
-    var deck = std.ArrayList(u8).init(allocator);
-    defer deck.deinit();
+    var deck = try std.ArrayList(u8).initCapacity(allocator, 0);
+    defer deck.deinit(allocator);
 
     for (0..52) |i| {
-        try deck.append(@intCast(i));
+        try deck.append(allocator, @intCast(i));
     }
 
     rng.random().shuffle(u8, deck.items);
@@ -381,38 +381,38 @@ fn cloneGameStateLocal(original: *game_state.GameState, allocator: std.mem.Alloc
 
     // Copy action history
     for (original.actions.items) |action| {
-        try clone.actions.append(action);
+        try clone.actions.append(allocator, action);
     }
     for (original.action_sequence.items) |action| {
-        try clone.action_sequence.append(action);
+        try clone.action_sequence.append(allocator, action);
     }
 
     return clone;
 }
 
 fn getAvailableActionsLocal(game_state_ptr: *game_state.GameState, allocator: std.mem.Allocator) ![]game_state.Action {
-    var actions = std.ArrayList(game_state.Action).init(allocator);
+    var actions = try std.ArrayList(game_state.Action).initCapacity(allocator, 0);
 
     const current_bet = game_state_ptr.current_bet;
     const player = &game_state_ptr.players[game_state_ptr.current_player];
 
     // Always allow fold
-    try actions.append(game_state.Action.fold());
+    try actions.append(allocator, game_state.Action.fold());
 
     // Check or call
     if (current_bet == player.bet_this_round) {
-        try actions.append(game_state.Action.check());
+        try actions.append(allocator, game_state.Action.check());
     } else {
-        try actions.append(game_state.Action.call());
+        try actions.append(allocator, game_state.Action.call());
     }
 
     // Raise if possible
     const min_raise = current_bet + game_state_ptr.big_blind;
     if (min_raise <= player.stack + player.bet_this_round) {
-        try actions.append(game_state.Action.raise(min_raise));
+        try actions.append(allocator, game_state.Action.raise(min_raise));
     }
 
-    return actions.toOwnedSlice();
+    return actions.toOwnedSlice(allocator);
 }
 
 fn getUtilityLocal(game_state_ptr: *game_state.GameState, player: u8) f64 {

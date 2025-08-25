@@ -2,7 +2,7 @@
 // Efficient storage and retrieval of learned strategies
 
 const std = @import("std");
-const game_state = @import("game_state.zig");
+const io_helpers = @import("io_helpers.zig");const game_state = @import("game_state.zig");
 
 // Action probability distribution
 pub const ActionProbabilities = struct {
@@ -248,10 +248,10 @@ pub const StrategyTable = struct {
         const file = try std.fs.cwd().createFile(file_path, .{});
         defer file.close();
 
-        const writer = file.writer();
+        // Use direct file I/O
 
         // Write header
-        try writer.writeInt(u32, @intCast(self.strategies.count()), .little);
+        try io_helpers.writeInt(file, u32, @intCast(self.strategies.count()));
 
         // Write each strategy
         var iterator = self.strategies.iterator();
@@ -259,30 +259,30 @@ pub const StrategyTable = struct {
             const hash = entry.key_ptr.*;
             const profile = entry.value_ptr;
 
-            try writer.writeInt(u64, hash, .little);
-            try writer.writeInt(u32, @intCast(profile.action_probs.actions.len), .little);
+            try io_helpers.writeInt(file, u64, hash);
+            try io_helpers.writeInt(file, u32, @intCast(profile.action_probs.actions.len));
 
             // Write actions
             for (profile.action_probs.actions) |action| {
-                try writer.writeInt(u8, @intFromEnum(action), .little);
+                try io_helpers.writeInt(file, u8, @intFromEnum(action));
             }
 
             // Write probabilities
             for (profile.action_probs.probabilities) |prob| {
-                try writer.writeInt(u64, @bitCast(prob), .little);
+                try io_helpers.writeInt(file, u64, @bitCast(prob));
             }
 
             // Write regret sums
             for (profile.regret_sum) |regret| {
-                try writer.writeInt(u64, @bitCast(regret), .little);
+                try io_helpers.writeInt(file, u64, @bitCast(regret));
             }
 
             // Write strategy sums
             for (profile.strategy_sum) |sum| {
-                try writer.writeInt(u64, @bitCast(sum), .little);
+                try io_helpers.writeInt(file, u64, @bitCast(sum));
             }
 
-            try writer.writeInt(u32, profile.reach_count, .little);
+            try io_helpers.writeInt(file, u32, profile.reach_count);
         }
     }
 
@@ -290,22 +290,21 @@ pub const StrategyTable = struct {
         const file = try std.fs.cwd().openFile(file_path, .{});
         defer file.close();
 
-        const reader = file.reader();
 
         // Read header
-        const num_strategies = try reader.readInt(u32, .little);
+        const num_strategies = try io_helpers.readInt(file, u32);
 
         // Read each strategy
         for (0..num_strategies) |_| {
-            const hash = try reader.readInt(u64, .little);
-            const num_actions = try reader.readInt(u32, .little);
+            const hash = try io_helpers.readInt(file, u64);
+            const num_actions = try io_helpers.readInt(file, u32);
 
             // Read actions
             const actions = try self.allocator.alloc(game_state.ActionType, num_actions);
             defer self.allocator.free(actions);
 
             for (actions) |*action| {
-                const action_byte = try reader.readInt(u8, .little);
+                const action_byte = try io_helpers.readInt(file, u8);
                 action.* = @enumFromInt(action_byte);
             }
 
@@ -314,23 +313,23 @@ pub const StrategyTable = struct {
 
             // Read probabilities
             for (profile.action_probs.probabilities) |*prob| {
-                const prob_bits = try reader.readInt(u64, .little);
+                const prob_bits = try io_helpers.readInt(file, u64);
                 prob.* = @bitCast(prob_bits);
             }
 
             // Read regret sums
             for (profile.regret_sum) |*regret| {
-                const regret_bits = try reader.readInt(u64, .little);
+                const regret_bits = try io_helpers.readInt(file, u64);
                 regret.* = @bitCast(regret_bits);
             }
 
             // Read strategy sums
             for (profile.strategy_sum) |*sum| {
-                const sum_bits = try reader.readInt(u64, .little);
+                const sum_bits = try io_helpers.readInt(file, u64);
                 sum.* = @bitCast(sum_bits);
             }
 
-            profile.reach_count = try reader.readInt(u32, .little);
+            profile.reach_count = try io_helpers.readInt(file, u32);
 
             try self.strategies.put(hash, profile);
         }

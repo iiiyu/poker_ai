@@ -400,11 +400,11 @@ pub const MCCFRTrainer = struct {
         var game = try game_state.GameState.init(self.allocator, 2, 5, 10);
 
         // Deal random hands
-        var deck = std.ArrayList(u8).init(self.allocator);
-        defer deck.deinit();
+        var deck = try std.ArrayList(u8).initCapacity(self.allocator, 0);
+        defer deck.deinit(self.allocator);
 
         for (0..52) |i| {
-            try deck.append(@intCast(i));
+            try deck.append(self.allocator, @intCast(i));
         }
 
         // Shuffle deck
@@ -421,28 +421,28 @@ pub const MCCFRTrainer = struct {
 
     fn getAvailableActions(self: *Self, game_state_ptr: *game_state.GameState) ![]game_state.Action {
         // self is used for allocator access
-        var actions = std.ArrayList(game_state.Action).init(self.allocator);
+        var actions = try std.ArrayList(game_state.Action).initCapacity(self.allocator, 0);
 
         const current_bet = game_state_ptr.current_bet;
         const player = &game_state_ptr.players[game_state_ptr.current_player];
 
         // Always allow fold
-        try actions.append(game_state.Action.fold());
+        try actions.append(self.allocator, game_state.Action.fold());
 
         // Check or call
         if (current_bet == player.bet_this_round) {
-            try actions.append(game_state.Action.check());
+            try actions.append(self.allocator, game_state.Action.check());
         } else {
-            try actions.append(game_state.Action.call());
+            try actions.append(self.allocator, game_state.Action.call());
         }
 
         // Raise options
         const min_raise = current_bet + game_state_ptr.big_blind;
         if (min_raise <= player.stack + player.bet_this_round) {
-            try actions.append(game_state.Action.raise(min_raise));
+            try actions.append(self.allocator, game_state.Action.raise(min_raise));
         }
 
-        return actions.toOwnedSlice();
+        return actions.toOwnedSlice(self.allocator);
     }
 
     fn getOrCreateNode(self: *Self, hash: u64, info_set: []const u8, num_actions: u8) !*InfoSetNode {
@@ -477,10 +477,10 @@ pub const MCCFRTrainer = struct {
 
         // Copy action sequences
         for (original.actions.items) |action| {
-            try clone.actions.append(action);
+            try clone.actions.append(self.allocator, action);
         }
         for (original.action_sequence.items) |action| {
-            try clone.action_sequence.append(action);
+            try clone.action_sequence.append(self.allocator, action);
         }
 
         return clone;

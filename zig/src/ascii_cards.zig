@@ -115,19 +115,19 @@ pub fn renderNormal(card: Card, allocator: std.mem.Allocator) ![]u8 {
     const rank_char = getRankChar(rs.rank);
     const color = getSuitColor(rs.suit);
 
-    var result = std.ArrayList(u8).init(allocator);
-    defer result.deinit();
+    var result = try std.ArrayList(u8).initCapacity(allocator, 0);
+    defer result.deinit(allocator);
 
     // Top line: ┌─────┐
-    try result.appendSlice("┌─────┐\n");
+    try result.appendSlice(allocator, "┌─────┐\n");
 
     // Middle line: |A♠   |
-    try result.writer().print("│{s}{c}{s}   │\n", .{ color, rank_char, Colors.RESET });
+    try result.writer(allocator).print("│{s}{c}{s}   │\n", .{ color, rank_char, Colors.RESET });
 
     // Bottom line: └─────┘
-    try result.appendSlice("└─────┘");
+    try result.appendSlice(allocator, "└─────┘");
 
-    return result.toOwnedSlice();
+    return result.toOwnedSlice(allocator);
 }
 
 /// Render card in detailed mode (5 lines)
@@ -137,25 +137,25 @@ pub fn renderDetailed(card: Card, allocator: std.mem.Allocator) ![]u8 {
     const suit_symbol = getSuitSymbol(rs.suit);
     const color = getSuitColor(rs.suit);
 
-    var result = std.ArrayList(u8).init(allocator);
-    defer result.deinit();
+    var result = try std.ArrayList(u8).initCapacity(allocator, 0);
+    defer result.deinit(allocator);
 
     // Top border
-    try result.appendSlice("┌───────┐\n");
+    try result.appendSlice(allocator, "┌───────┐\n");
 
     // Rank and suit (top)
-    try result.writer().print("│{s}{c}     {s}│\n", .{ color, rank_char, Colors.RESET });
+    try result.writer(allocator).print("│{s}{c}     {s}│\n", .{ color, rank_char, Colors.RESET });
 
     // Center suit symbol
-    try result.writer().print("│  {s}{s}{s}  │\n", .{ color, suit_symbol, Colors.RESET });
+    try result.writer(allocator).print("│  {s}{s}{s}  │\n", .{ color, suit_symbol, Colors.RESET });
 
     // Rank and suit (bottom, inverted)
-    try result.writer().print("│{s}     {c}{s}│\n", .{ color, rank_char, Colors.RESET });
+    try result.writer(allocator).print("│{s}     {c}{s}│\n", .{ color, rank_char, Colors.RESET });
 
     // Bottom border
-    try result.appendSlice("└───────┘");
+    try result.appendSlice(allocator, "└───────┘");
 
-    return result.toOwnedSlice();
+    return result.toOwnedSlice(allocator);
 }
 
 /// Render card face down
@@ -173,26 +173,26 @@ pub fn renderMultipleCards(cards: []const Card, mode: DisplayMode, allocator: st
 
     switch (mode) {
         .compact => {
-            var result = std.ArrayList(u8).init(allocator);
-            defer result.deinit();
+            var result = try std.ArrayList(u8).initCapacity(allocator, 0);
+            defer result.deinit(allocator);
 
             for (cards, 0..) |card, i| {
-                if (i > 0) try result.appendSlice(" ");
+                if (i > 0) try result.appendSlice(allocator, " ");
                 const card_str = try renderCompact(card, allocator);
                 defer allocator.free(card_str);
-                try result.appendSlice(card_str);
+                try result.appendSlice(allocator, card_str);
             }
 
-            return result.toOwnedSlice();
+            return result.toOwnedSlice(allocator);
         },
         .normal, .detailed => {
             // Render each card and then combine line by line
-            var card_renders = std.ArrayList([]u8).init(allocator);
+            var card_renders = try std.ArrayList([]u8).initCapacity(allocator, 0);
             defer {
                 for (card_renders.items) |render| {
                     allocator.free(render);
                 }
-                card_renders.deinit();
+                card_renders.deinit(allocator);
             }
 
             for (cards) |card| {
@@ -200,49 +200,49 @@ pub fn renderMultipleCards(cards: []const Card, mode: DisplayMode, allocator: st
                     try renderNormal(card, allocator)
                 else
                     try renderDetailed(card, allocator);
-                try card_renders.append(render);
+                try card_renders.append(allocator, render);
             }
 
             // Split each render into lines
-            var all_lines = std.ArrayList([][]const u8).init(allocator);
+            var all_lines = try std.ArrayList([][]const u8).initCapacity(allocator, 0);
             defer {
                 for (all_lines.items) |lines| {
                     allocator.free(lines);
                 }
-                all_lines.deinit();
+                all_lines.deinit(allocator);
             }
 
             for (card_renders.items) |render| {
-                var lines = std.ArrayList([]const u8).init(allocator);
-                defer lines.deinit();
+                var lines = try std.ArrayList([]const u8).initCapacity(allocator, 0);
+                defer lines.deinit(allocator);
 
                 var line_iter = std.mem.splitScalar(u8, render, '\n');
                 while (line_iter.next()) |line| {
-                    try lines.append(line);
+                    try lines.append(allocator, line);
                 }
 
-                try all_lines.append(try lines.toOwnedSlice());
+                try all_lines.append(allocator, try lines.toOwnedSlice(allocator));
             }
 
             // Combine lines horizontally
-            var result = std.ArrayList(u8).init(allocator);
-            defer result.deinit();
+            var result = try std.ArrayList(u8).initCapacity(allocator, 0);
+            defer result.deinit(allocator);
 
             if (all_lines.items.len > 0) {
                 const num_lines = all_lines.items[0].len;
 
                 for (0..num_lines) |line_idx| {
                     for (all_lines.items, 0..) |card_lines, card_idx| {
-                        if (card_idx > 0) try result.appendSlice(" ");
+                        if (card_idx > 0) try result.appendSlice(allocator, " ");
                         if (line_idx < card_lines.len) {
-                            try result.appendSlice(card_lines[line_idx]);
+                            try result.appendSlice(allocator, card_lines[line_idx]);
                         }
                     }
-                    if (line_idx < num_lines - 1) try result.appendSlice("\n");
+                    if (line_idx < num_lines - 1) try result.appendSlice(allocator, "\n");
                 }
             }
 
-            return result.toOwnedSlice();
+            return result.toOwnedSlice(allocator);
         },
     }
 }

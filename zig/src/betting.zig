@@ -185,7 +185,7 @@ pub const BettingManager = struct {
         // Record action in sequence
         if (@hasField(@TypeOf(self.action_sequence), "allocator")) {
             const summary = ActionSummary.init(action.player_id, action.action_type, action.amount);
-            self.action_sequence.append(summary) catch {};
+            self.action_sequence.append(self.allocator, summary) catch {};
         }
     }
 
@@ -415,7 +415,7 @@ pub const BettingPatternAnalyzer = struct {
     }
 
     pub fn addAction(self: *BettingPatternAnalyzer, action: ActionSummary) !void {
-        try self.action_history.append(action);
+        try self.action_history.append(self.allocator, action);
     }
 
     /// Get aggression factor for a player

@@ -299,8 +299,8 @@ test "information set generation" {
     
     // Set up some game state
     game.players[0].hand = poker_ai.game_state.Hand.init(0, 1);
-    try game.action_sequence.append(@intFromEnum(poker_ai.game_state.ActionType.call));
-    try game.action_sequence.append(@intFromEnum(poker_ai.game_state.ActionType.raise));
+    try game.action_sequence.append(allocator, @intFromEnum(poker_ai.game_state.ActionType.call));
+    try game.action_sequence.append(allocator, @intFromEnum(poker_ai.game_state.ActionType.raise));
     
     // Generate info set
     const info_set = try game.getInfoSet(0);
@@ -351,7 +351,7 @@ test "edge cases and stress testing" {
     
     // Add many actions
     for (0..100) |_| {
-        try action_game.action_sequence.append(@intFromEnum(poker_ai.game_state.ActionType.call));
+        try action_game.action_sequence.append(allocator, @intFromEnum(poker_ai.game_state.ActionType.call));
     }
     
     try testing.expectEqual(@as(usize, 100), action_game.action_sequence.items.len);

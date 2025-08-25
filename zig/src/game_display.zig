@@ -72,18 +72,18 @@ pub const GameDisplay = struct {
     use_color: bool,
     action_history: std.ArrayList(ActionHistoryEntry),
 
-    pub fn init(allocator: std.mem.Allocator, width: u16, height: u16, display_mode: DisplayMode, use_color: bool) GameDisplay {
+    pub fn init(allocator: std.mem.Allocator, width: u16, height: u16, display_mode: DisplayMode, use_color: bool) !GameDisplay {
         return GameDisplay{
             .allocator = allocator,
             .layout = TableLayout.init(width, height),
             .display_mode = display_mode,
             .use_color = use_color,
-            .action_history = std.ArrayList(ActionHistoryEntry).init(allocator),
+            .action_history = try std.ArrayList(ActionHistoryEntry).initCapacity(allocator, 0),
         };
     }
 
     pub fn deinit(self: *GameDisplay) void {
-        self.action_history.deinit();
+        self.action_history.deinit(self.allocator);
     }
 
     /// Clear screen and draw complete game state
@@ -118,7 +118,7 @@ pub const GameDisplay = struct {
         try self.drawStatusBar(players);
 
         // Flush output to ensure smooth rendering
-        std.io.getStdOut().writer().writeAll("") catch {};
+        // Flush stdout (no-op in current implementation)
     }
 
     /// Draw table border
@@ -278,14 +278,14 @@ pub const GameDisplay = struct {
         const is_current = if (current_player) |cp| cp == player_index else false;
 
         // Player name and status
-        var name_line = std.ArrayList(u8).init(self.allocator);
-        defer name_line.deinit();
+        var name_line = try std.ArrayList(u8).initCapacity(self.allocator, 0);
+        defer name_line.deinit(self.allocator);
 
-        if (is_dealer) try name_line.appendSlice("(D) ");
-        if (p.is_small_blind) try name_line.appendSlice("(SB) ");
-        if (p.is_big_blind) try name_line.appendSlice("(BB) ");
+        if (is_dealer) try name_line.appendSlice(self.allocator, "(D) ");
+        if (p.is_small_blind) try name_line.appendSlice(self.allocator, "(SB) ");
+        if (p.is_big_blind) try name_line.appendSlice(self.allocator, "(BB) ");
 
-        try name_line.writer().print("P{d}", .{player_index + 1});
+        try name_line.writer(self.allocator).print("P{d}", .{player_index + 1});
 
         if (is_current and self.use_color) {
             self.moveCursor(pos.y - 2, pos.x - 5);
@@ -437,7 +437,7 @@ pub const GameDisplay = struct {
 
     /// Add action to history
     pub fn addAction(self: *GameDisplay, player_name: []const u8, action: []const u8, amount: ?u32, stage: BettingStage) !void {
-        try self.action_history.append(ActionHistoryEntry{
+        try self.action_history.append(self.allocator, ActionHistoryEntry{
             .player_name = player_name,
             .action = action,
             .amount = amount,

@@ -25,20 +25,22 @@ pub const Pot = struct {
     eligible_players: std.ArrayList(PlayerId),
     max_contribution_per_player: ChipAmount,
     is_side_pot: bool,
+    allocator: std.mem.Allocator,
 
     const Self = @This();
 
     pub fn init(allocator: std.mem.Allocator, max_contribution: ChipAmount, is_side: bool) Self {
         return Self{
             .amount = 0,
-            .eligible_players = std.ArrayList(PlayerId).init(allocator),
+            .eligible_players = std.ArrayList(PlayerId){},
             .max_contribution_per_player = max_contribution,
             .is_side_pot = is_side,
+            .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.eligible_players.deinit();
+        self.eligible_players.deinit(self.allocator);
     }
 
     pub fn addPlayer(self: *Self, player_id: PlayerId) !void {
@@ -46,7 +48,7 @@ pub const Pot = struct {
         for (self.eligible_players.items) |existing_id| {
             if (existing_id == player_id) return;
         }
-        try self.eligible_players.append(player_id);
+        try self.eligible_players.append(self.allocator, player_id);
     }
 
     pub fn isPlayerEligible(self: Self, player_id: PlayerId) bool {
@@ -73,7 +75,7 @@ pub const PotManager = struct {
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .main_pot = Pot.init(allocator, std.math.maxInt(ChipAmount), false),
-            .side_pots = std.ArrayList(Pot).init(allocator),
+            .side_pots = std.ArrayList(Pot){},
             .total_contributions = [_]ChipAmount{0} ** MAX_PLAYERS,
             .allocator = allocator,
         };
@@ -84,7 +86,7 @@ pub const PotManager = struct {
         for (self.side_pots.items) |*side_pot| {
             side_pot.deinit();
         }
-        self.side_pots.deinit();
+        self.side_pots.deinit(self.allocator);
     }
 
     pub fn reset(self: *Self) void {
@@ -148,7 +150,7 @@ pub const PotManager = struct {
                 var new_side_pot = Pot.init(self.allocator, remaining, true);
                 new_side_pot.amount = remaining;
                 try new_side_pot.addPlayer(player_id);
-                try self.side_pots.append(new_side_pot);
+                try self.side_pots.append(self.allocator, new_side_pot);
                 remaining = 0;
             }
         }
@@ -172,12 +174,12 @@ pub const PotManager = struct {
         // In a complete implementation, this would use hand evaluator
 
         // Find active players eligible for main pot
-        var eligible_for_main: std.ArrayList(PlayerId) = std.ArrayList(PlayerId).init(self.allocator);
+        var eligible_for_main: std.ArrayList(PlayerId) = try std.ArrayList(PlayerId).initCapacity(self.allocator, 0);
         defer eligible_for_main.deinit();
 
         for (players, 0..) |p, i| {
             if (p.is_active and self.main_pot.isPlayerEligible(@intCast(i))) {
-                try eligible_for_main.append(@intCast(i));
+                try eligible_for_main.append(self.allocator, @intCast(i));
             }
         }
 
@@ -196,12 +198,12 @@ pub const PotManager = struct {
 
         // Distribute side pots
         for (self.side_pots.items) |side_pot| {
-            var eligible_for_side: std.ArrayList(PlayerId) = std.ArrayList(PlayerId).init(self.allocator);
+            var eligible_for_side: std.ArrayList(PlayerId) = try std.ArrayList(PlayerId).initCapacity(self.allocator, 0);
             defer eligible_for_side.deinit();
 
             for (players, 0..) |p, i| {
                 if (p.is_active and side_pot.isPlayerEligible(@intCast(i))) {
-                    try eligible_for_side.append(@intCast(i));
+                    try eligible_for_side.append(self.allocator, @intCast(i));
                 }
             }
 
@@ -230,12 +232,12 @@ pub const PotManager = struct {
         self.side_pots.clearRetainingCapacity();
 
         // Collect all-in amounts
-        var all_in_amounts = std.ArrayList(ChipAmount).init(self.allocator);
+        var all_in_amounts = try std.ArrayList(ChipAmount).initCapacity(self.allocator, 0);
         defer all_in_amounts.deinit();
 
         for (players) |p| {
             if (p.is_all_in and p.is_active) {
-                try all_in_amounts.append(p.total_bet);
+                try all_in_amounts.append(self.allocator, p.total_bet);
             }
         }
 
@@ -256,7 +258,7 @@ pub const PotManager = struct {
                     }
                 }
 
-                try self.side_pots.append(side_pot);
+                try self.side_pots.append(self.allocator, side_pot);
                 prev_amount = all_in_amount;
             }
         }
@@ -264,7 +266,7 @@ pub const PotManager = struct {
 
     /// Get pot breakdown for display
     pub fn getPotBreakdown(self: Self, allocator: std.mem.Allocator) ![]const u8 {
-        var breakdown = std.ArrayList(u8).init(allocator);
+        var breakdown = try std.ArrayList(u8).initCapacity(allocator, 0);
         defer breakdown.deinit();
 
         try breakdown.writer().print("Main Pot: {} ({} players)\n", .{ self.main_pot.amount, self.main_pot.getEligiblePlayerCount() });
@@ -275,7 +277,7 @@ pub const PotManager = struct {
 
         try breakdown.writer().print("Total: {}\n", .{self.getTotalPot()});
 
-        return breakdown.toOwnedSlice();
+        return breakdown.toOwnedSlice(self.allocator);
     }
 
     /// Get contribution of a player to a specific pot
@@ -354,8 +356,8 @@ pub const AllInScenario = struct {
     }
 
     pub fn addAllIn(self: *AllInScenario, player_id: PlayerId, amount: ChipAmount) !void {
-        try self.all_in_players.append(player_id);
-        try self.all_in_amounts.append(amount);
+        try self.all_in_players.append(self.allocator, player_id);
+        try self.all_in_amounts.append(self.allocator, amount);
     }
 
     pub fn calculateSidePots(self: *AllInScenario, players: []const Player) !void {
@@ -366,7 +368,7 @@ pub const AllInScenario = struct {
         self.side_pot_structure.clearRetainingCapacity();
 
         // Create sorted list of unique all-in amounts
-        var unique_amounts = std.ArrayList(ChipAmount).init(self.allocator);
+        var unique_amounts = try std.ArrayList(ChipAmount).initCapacity(self.allocator, 0);
         defer unique_amounts.deinit();
 
         for (self.all_in_amounts.items) |amount| {
@@ -378,7 +380,7 @@ pub const AllInScenario = struct {
                 }
             }
             if (!found) {
-                try unique_amounts.append(amount);
+                try unique_amounts.append(self.allocator, amount);
             }
         }
 
@@ -395,11 +397,11 @@ pub const AllInScenario = struct {
             // Add eligible players
             for (players, 0..) |p, i| {
                 if (p.is_active and p.total_bet >= amount) {
-                    try info.eligible_players.append(@intCast(i));
+                    try info.eligible_players.append(self.allocator, @intCast(i));
                 }
             }
 
-            try self.side_pot_structure.append(info);
+            try self.side_pot_structure.append(self.allocator, info);
         }
     }
 };
