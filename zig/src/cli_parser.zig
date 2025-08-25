@@ -224,7 +224,9 @@ pub const Config = struct {
     }
     
     pub fn deinit(self: *Config, allocator: std.mem.Allocator) void {
-        allocator.free(self.players);
+        if (self.players.len > 0) {
+            allocator.free(self.players);
+        }
     }
 };
 

@@ -166,10 +166,11 @@ pub const ActionValidator = struct {
         _ = all_players;
         
         var legal_actions = std.ArrayList(ActionType).init(self.allocator);
-        defer legal_actions.deinit();
+        // Don't defer deinit here - toOwnedSlice() transfers ownership to caller
         
         if (!target_player.canAct()) {
-            return &[_]ActionType{};
+            // Return an empty owned slice for consistency
+            return legal_actions.toOwnedSlice();
         }
         
         // Fold is always legal (except when already all-in)

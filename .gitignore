@@ -288,6 +288,9 @@ uv.lock
 
 .serena/
 
+# GitHub workflows (disabled)
+.github/
+
 ### ZIG STUFF
 
 # Zig cache directory
@@ -323,3 +326,4 @@ zig/.zig-cache/z/
 zig/KEYBOARD_FIX_SUMMARY.md
 zig/TODO.md
 zig/NOTES.md
+zig/SEGFAULT_FIX.md

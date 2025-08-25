@@ -173,10 +173,11 @@ pub const TerminalUI = struct {
         const menu_items = [_]MainMenuItem{ .play_game, .train_ai, .analyze_hands, .settings, .view_stats, .quit };
 
         var selected_index: usize = 0;
+        
+        // Draw menu once initially
+        try self.drawMainMenu(menu_items[0..], selected_index);
 
         while (self.current_menu == .main_menu and self.is_running) {
-            try self.drawMainMenu(menu_items[0..], selected_index);
-
             const input_event = try self.input.handleMenu(&[_][]const u8{
                 menu_items[0].toString(),
                 menu_items[1].toString(),
@@ -200,6 +201,10 @@ pub const TerminalUI = struct {
                             }
                         },
                         .quit => self.is_running = false,
+                        .up, .down => {
+                            // Redraw menu when selection changes
+                            try self.drawMainMenu(menu_items[0..], selected_index);
+                        },
                         else => {},
                     }
                 },
@@ -270,9 +275,11 @@ pub const TerminalUI = struct {
         const menu_items = [_]SettingsMenuItem{ .display_mode, .sound_effects, .ai_difficulty, .betting_structure, .player_names, .save_settings, .back };
 
         var selected_index: usize = 0;
+        
+        // Draw menu once initially
+        try self.drawSettingsMenu(menu_items[0..], selected_index);
 
         while (self.current_menu == .settings_menu and self.is_running) {
-            try self.drawSettingsMenu(menu_items[0..], selected_index);
 
             const input_event = try self.input.handleMenu(&[_][]const u8{
                 menu_items[0].toString(),
@@ -299,6 +306,10 @@ pub const TerminalUI = struct {
                             }
                         },
                         .back, .quit => self.current_menu = .main_menu,
+                        .up, .down => {
+                            // Redraw menu when selection changes
+                            try self.drawSettingsMenu(menu_items[0..], selected_index);
+                        },
                         else => {},
                     }
                 },
@@ -794,9 +805,26 @@ pub const TerminalUI = struct {
         y += 3;
 
         self.moveCursor(y, center_x - 15);
-        std.debug.print("Press any key to return to main menu...", .{});
+        std.debug.print("Press Enter to return to main menu...", .{});
+        
+        // Flush output to ensure everything is displayed
+        std.io.getStdOut().writer().writeAll("") catch {};
 
-        try self.input.waitForAnyKey(null);
+        // Use readWithTimeout to properly wait for input
+        // This avoids the infinite loop when raw mode check fails
+        while (true) {
+            const char = try self.input.readWithTimeout(100) orelse {
+                // Check if we should exit on timeout (allows Ctrl+C to work)
+                if (!self.is_running) break;
+                continue;
+            };
+            if (char == '\n' or char == '\r' or char == 'q' or char == 'Q' or char == 27) { // 27 = ESC
+                break;
+            }
+        }
+        
+        // Redraw the main menu when returning
+        // No need - the main menu loop will handle this
     }
 
     /// Settings change functions

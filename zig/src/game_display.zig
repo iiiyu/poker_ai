@@ -97,8 +97,9 @@ pub const GameDisplay = struct {
         dealer_position: u8,
         current_player: ?u8
     ) !void {
-        // Move cursor to home position instead of clearing screen
-        // This prevents flashing by overwriting existing content
+        // Clear screen and move cursor to home position
+        // This ensures a clean display without artifacts
+        std.debug.print("\x1b[2J", .{}); // Clear entire screen
         ascii_cards.Screen.moveTo(1, 1);
         
         // Draw border
