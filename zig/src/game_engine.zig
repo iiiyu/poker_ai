@@ -11,6 +11,7 @@
 //! - Thread-safe for parallel training
 
 const std = @import("std");
+const config = @import("config.zig");
 const player = @import("player.zig");
 const pot = @import("pot.zig");
 const betting = @import("betting.zig");
@@ -122,8 +123,8 @@ pub const Action = struct {
 };
 
 /// Maximum number of players supported
-pub const MAX_PLAYERS = 8;
-pub const MIN_PLAYERS = 2;
+pub const MAX_PLAYERS = config.MAX_PLAYERS;
+pub const MIN_PLAYERS = config.MIN_PLAYERS;
 
 /// Game configuration
 pub const GameConfig = struct {
@@ -175,7 +176,7 @@ pub const TexasHoldemGameEngine = struct {
     const Self = @This();
 
     /// Initialize a new Texas Hold'em game
-    pub fn init(allocator: std.mem.Allocator, num_players: u8, config: GameConfig) !Self {
+    pub fn init(allocator: std.mem.Allocator, num_players: u8, game_config: GameConfig) !Self {
         if (num_players < MIN_PLAYERS or num_players > MAX_PLAYERS) {
             return error.InvalidPlayerCount;
         }
@@ -194,7 +195,7 @@ pub const TexasHoldemGameEngine = struct {
             .pot_manager = pot.PotManager.init(allocator),
             .betting_manager = betting.BettingManager.init(),
             .action_validator = action_validator.ActionValidator.initWithAllocator(allocator),
-            .config = config,
+            .config = game_config,
             .action_history = std.ArrayList(Action){},
             .is_terminal = false,
             .allocator = allocator,
@@ -202,7 +203,7 @@ pub const TexasHoldemGameEngine = struct {
 
         // Initialize players
         for (0..num_players) |i| {
-            engine.players[i] = player.Player.init(@intCast(i), config.initial_stack);
+            engine.players[i] = player.Player.init(@intCast(i), game_config.initial_stack);
         }
 
         // Set blinds and dealer positions for heads-up vs multi-player
@@ -539,13 +540,13 @@ pub const TexasHoldemGameEngine = struct {
 test "game engine initialization" {
     const testing = std.testing;
 
-    const config = GameConfig{
+    const game_config = GameConfig{
         .small_blind = 5,
         .big_blind = 10,
         .initial_stack = 1000,
     };
 
-    var engine = try TexasHoldemGameEngine.init(testing.allocator, 6, config);
+    var engine = try TexasHoldemGameEngine.init(testing.allocator, 6, game_config);
     defer engine.deinit();
 
     try testing.expectEqual(@as(u8, 6), engine.num_players);

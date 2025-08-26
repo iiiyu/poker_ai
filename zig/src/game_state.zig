@@ -2,6 +2,7 @@
 // Efficient representation optimized for CFR algorithm
 
 const std = @import("std");
+const config = @import("config.zig");
 const hand_eval = @import("hand_eval.zig");
 
 // Card representation (0-51)
@@ -133,7 +134,7 @@ pub const Player = struct {
 // Complete game state
 pub const GameState = struct {
     // Players
-    players: [6]Player,
+    players: [config.MAX_PLAYERS]Player,
     num_players: u8,
     active_players: u8,
 

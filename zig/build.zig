@@ -138,6 +138,27 @@ pub fn build(b: *std.Build) void {
     const play_step = b.step("play", "Run the interactive poker game");
     play_step.dependOn(&run_play_poker.step);
 
+    // 8-player demo executable
+    const demo_8_player = b.addExecutable(.{
+        .name = "demo_8_player",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/demo_8_player.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    
+    demo_8_player.root_module.addImport("poker_ai", lib.root_module);
+    demo_8_player.linkLibC();
+    
+    b.installArtifact(demo_8_player);
+    
+    const run_demo_8 = b.addRunArtifact(demo_8_player);
+    run_demo_8.step.dependOn(b.getInstallStep());
+    
+    const demo_8_step = b.step("demo-8", "Run the 8-player demo");
+    demo_8_step.dependOn(&run_demo_8.step);
+
     // Training executable
     const train_exe = b.addExecutable(.{
         .name = "train",
@@ -189,6 +210,7 @@ pub fn build(b: *std.Build) void {
         "tests/test_game_engine_integration.zig",
         "tests/test_mccfr_complete.zig",
         "tests/test_tournament.zig",
+        "tests/test_8_player.zig",
     };
     
     for (test_files) |test_file| {

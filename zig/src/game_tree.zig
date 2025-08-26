@@ -2,7 +2,9 @@
 //! Provides cache-efficient tree traversal with work-stealing support
 
 const std = @import("std");
-const io_helpers = @import("io_helpers.zig");const game_state = @import("game_state.zig");
+const config = @import("config.zig");
+const io_helpers = @import("io_helpers.zig");
+const game_state = @import("game_state.zig");
 const GameState = game_state.GameState;
 const Action = game_state.Action;
 const Round = game_state.Round;
@@ -37,7 +39,7 @@ pub const GameNode = packed struct {
     depth: u8,
     
     /// Cached utility values for each player (if terminal)
-    utilities: ?[6]f32,
+    utilities: ?[config.MAX_PLAYERS]f32,
 };
 
 /// Edge connecting nodes with actions
@@ -210,7 +212,7 @@ pub const GameTree = struct {
         
         // Cache utilities if terminal
         if (node.is_terminal) {
-            var utils: [6]f32 = undefined;
+            var utils: [config.MAX_PLAYERS]f32 = undefined;
             for (0..state.num_players) |p| {
                 utils[p] = state.getUtility(@intCast(p));
             }

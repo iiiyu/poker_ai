@@ -2,7 +2,9 @@
 //! Implements full Monte Carlo CFR with Linear CFR improvements
 
 const std = @import("std");
-const io_helpers = @import("io_helpers.zig");const poker_ai = @import("main.zig");
+const system_config = @import("config.zig");
+const io_helpers = @import("io_helpers.zig");
+const poker_ai = @import("main.zig");
 const game_state = @import("game_state.zig");
 const linear_cfr = @import("linear_cfr.zig");
 const game_tree = @import("game_tree.zig");
@@ -117,7 +119,7 @@ pub fn trainMCCFR(config: TrainingConfig, allocator: std.mem.Allocator) !void {
         game.shuffleDeck(prng.random());
         
         // Deal hole cards
-        var hands: [6][2]game_state.Card = undefined;
+        var hands: [system_config.MAX_PLAYERS][2]game_state.Card = undefined;
         for (0..config.num_players) |p| {
             hands[p][0] = game.dealCard();
             hands[p][1] = game.dealCard();

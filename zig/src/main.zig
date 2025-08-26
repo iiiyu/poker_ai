@@ -2,6 +2,7 @@
 // High-performance poker AI system with MCCFR algorithm implementation
 
 const std = @import("std");
+pub const config = @import("config.zig");
 
 // Core modules
 pub const hand_eval = @import("hand_eval.zig");
@@ -68,11 +69,13 @@ pub const Action = game_state.Action;
 pub const HandRank = hand_eval.HandRank;
 pub const StrategyProfile = strategy_table.StrategyProfile;
 
-// Key constants
-pub const MAX_PLAYERS = 6;
-pub const DECK_SIZE = 52;
-pub const HAND_SIZE = 2;
-pub const BOARD_SIZE = 5;
+// Key constants - imported from central config
+pub const MAX_PLAYERS = config.MAX_PLAYERS;
+pub const MIN_PLAYERS = config.MIN_PLAYERS;
+pub const DEFAULT_PLAYERS = config.DEFAULT_PLAYERS;
+pub const DECK_SIZE = config.DECK_SIZE;
+pub const HAND_SIZE = config.HOLE_CARDS;
+pub const BOARD_SIZE = config.MAX_BOARD_CARDS;
 
 // Error types
 pub const PokerError = error{

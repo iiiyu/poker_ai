@@ -11,6 +11,7 @@
 //! - Rake calculations (if needed)
 
 const std = @import("std");
+const config = @import("config.zig");
 const player = @import("player.zig");
 const game_engine = @import("game_engine.zig");
 
