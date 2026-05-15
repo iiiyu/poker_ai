@@ -269,7 +269,7 @@ pub const TexasHoldemGameEngine = struct {
     }
 
     /// Deal hole cards to all players
-    pub fn dealHoleCards(self: *Self, hands: [][2]Card) !void {
+    pub fn dealHoleCards(self: *Self, hands: []const [2]Card) !void {
         if (hands.len != self.num_players) {
             return error.InvalidHandCount;
         }
@@ -283,7 +283,7 @@ pub const TexasHoldemGameEngine = struct {
 
     /// Deal community cards for current stage
     pub fn dealCommunityCards(self: *Self, cards: []const Card) !void {
-        const expected_cards = switch (self.betting_stage) {
+        const expected_cards: usize = switch (self.betting_stage) {
             .pre_flop => return error.CannotDealCardsPreflop,
             .flop => 3,
             .turn => 1,
@@ -455,7 +455,7 @@ pub const TexasHoldemGameEngine = struct {
             return error.GameNotTerminal;
         }
 
-        return self.pot_manager.calculatePayouts(&self.players[0..self.num_players]);
+        return self.pot_manager.calculatePayouts(self.players[0..self.num_players]);
     }
 
     /// Check if game is in terminal state

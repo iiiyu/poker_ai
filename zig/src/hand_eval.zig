@@ -352,7 +352,7 @@ pub const BatchEvaluator = struct {
     /// Evaluate multiple 5-card hands simultaneously
     /// Input: slice of 5-card hands
     /// Output: slice of hand ranks (caller must provide buffer)
-    pub fn evaluateFiveBatch(self: *const BatchEvaluator, hands: [][5]Card, results: []HandRank) void {
+    pub fn evaluateFiveBatch(self: *const BatchEvaluator, hands: []const [5]Card, results: []HandRank) void {
         std.debug.assert(hands.len == results.len);
 
         // For now, implement sequential version
@@ -363,7 +363,7 @@ pub const BatchEvaluator = struct {
     }
 
     /// Evaluate multiple 7-card hands simultaneously
-    pub fn evaluateSevenBatch(self: *const BatchEvaluator, hands: [][7]Card, results: []HandRank) void {
+    pub fn evaluateSevenBatch(self: *const BatchEvaluator, hands: []const [7]Card, results: []HandRank) void {
         std.debug.assert(hands.len == results.len);
 
         for (hands, results) |hand, *result| {

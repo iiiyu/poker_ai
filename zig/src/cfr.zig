@@ -253,8 +253,9 @@ pub const MCCFRTrainer = struct {
         }
 
         // Calculate opponent reach probabilities
-        const new_p0 = if (current_player == 0) p0 * strategy[sampled_action_idx] else p0;
-        const new_p1 = if (current_player == 1) p1 * strategy[sampled_action_idx] else p1;
+        const sampled_prob = strategy[sampled_action_idx];
+        const new_p0 = if (current_player == 0) p0 * sampled_prob else p0;
+        const new_p1 = if (current_player == 1) p1 * sampled_prob else p1;
 
         // Recursively traverse with sampled action
         const utility = try self.mccfr(&new_game, player, new_p0, new_p1, weight);
@@ -267,9 +268,10 @@ pub const MCCFRTrainer = struct {
             for (actions, 0..) |action, i| {
                 if (i == sampled_action_idx) {
                     // For sampled action, use actual utility
-                    const regret = utility - utility * strategy[sampled_action_idx];
+                    const regret = utility - utility * sampled_prob;
                     node.regret_sum[i] += counterfactual_prob * weight * regret;
                 } else {
+                    if (sampled_prob == 0.0) continue;
                     // For unsampled actions, estimate counterfactual value
                     // This is where importance sampling helps reduce variance
                     var action_game = try self.cloneGameState(game_state_ptr);
@@ -286,7 +288,7 @@ pub const MCCFRTrainer = struct {
                         utility; // Use sampled utility as baseline
 
                     const regret = action_utility - utility;
-                    node.regret_sum[i] += counterfactual_prob * weight * regret / strategy[sampled_action_idx];
+                    node.regret_sum[i] += counterfactual_prob * weight * regret / sampled_prob;
                 }
             }
         }
@@ -396,7 +398,7 @@ pub const MCCFRTrainer = struct {
     }
 
     // Helper functions
-    fn createRandomGame(self: *Self) !game_state.GameState {
+    pub fn createRandomGame(self: *Self) !game_state.GameState {
         var game = try game_state.GameState.init(self.allocator, 2, 5, 10);
 
         // Deal random hands
@@ -419,7 +421,7 @@ pub const MCCFRTrainer = struct {
         return game;
     }
 
-    fn getAvailableActions(self: *Self, game_state_ptr: *game_state.GameState) ![]game_state.Action {
+    pub fn getAvailableActions(self: *Self, game_state_ptr: *game_state.GameState) ![]game_state.Action {
         // self is used for allocator access
         var actions = try std.ArrayList(game_state.Action).initCapacity(self.allocator, 0);
 
@@ -445,7 +447,7 @@ pub const MCCFRTrainer = struct {
         return actions.toOwnedSlice(self.allocator);
     }
 
-    fn getOrCreateNode(self: *Self, hash: u64, info_set: []const u8, num_actions: u8) !*InfoSetNode {
+    pub fn getOrCreateNode(self: *Self, hash: u64, info_set: []const u8, num_actions: u8) !*InfoSetNode {
         if (self.nodes.getPtr(hash)) |node| {
             return node;
         }
@@ -455,7 +457,7 @@ pub const MCCFRTrainer = struct {
         return self.nodes.getPtr(hash).?;
     }
 
-    fn cloneGameState(self: *Self, original: *game_state.GameState) !game_state.GameState {
+    pub fn cloneGameState(self: *Self, original: *game_state.GameState) !game_state.GameState {
         var clone = try game_state.GameState.init(
             self.allocator,
             original.num_players,
@@ -486,7 +488,7 @@ pub const MCCFRTrainer = struct {
         return clone;
     }
 
-    fn getUtility(self: *Self, game_state_ptr: *game_state.GameState, player: u8) f64 {
+    pub fn getUtility(self: *Self, game_state_ptr: *game_state.GameState, player: u8) f64 {
         if (game_state_ptr.active_players == 1) {
             // All others folded
             return if (game_state_ptr.players[player].is_active)
@@ -618,7 +620,7 @@ pub const MCCFRTrainer = struct {
         std.log.info("Average strategy distance from uniform: {d:.6}", .{avg_strategy_distance});
     }
 
-    fn calculateConvergence(self: *Self) !f64 {
+    pub fn calculateConvergence(self: *Self) !f64 {
         var total_distance: f64 = 0.0;
         var count: u32 = 0;
 

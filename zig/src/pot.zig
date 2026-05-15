@@ -176,7 +176,7 @@ pub const PotManager = struct {
 
         // Find active players eligible for main pot
         var eligible_for_main: std.ArrayList(PlayerId) = try std.ArrayList(PlayerId).initCapacity(self.allocator, 0);
-        defer eligible_for_main.deinit();
+        defer eligible_for_main.deinit(self.allocator);
 
         for (players, 0..) |p, i| {
             if (p.is_active and self.main_pot.isPlayerEligible(@intCast(i))) {
@@ -200,7 +200,7 @@ pub const PotManager = struct {
         // Distribute side pots
         for (self.side_pots.items) |side_pot| {
             var eligible_for_side: std.ArrayList(PlayerId) = try std.ArrayList(PlayerId).initCapacity(self.allocator, 0);
-            defer eligible_for_side.deinit();
+            defer eligible_for_side.deinit(self.allocator);
 
             for (players, 0..) |p, i| {
                 if (p.is_active and side_pot.isPlayerEligible(@intCast(i))) {

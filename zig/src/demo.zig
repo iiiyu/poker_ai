@@ -96,7 +96,7 @@ fn demoGameState(allocator: std.mem.Allocator) !void {
         .{ (11 << 2) | 2, (10 << 2) | 3 }, // KQ suited for player 1
     };
 
-    game.dealHoleCards(&hands);
+    game.dealHoleCards(hands[0..]);
     print("Dealt hole cards to players", .{});
     print("Current player: {d}, current bet: {d}", .{ game.current_player, game.current_bet });
 

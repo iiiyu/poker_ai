@@ -42,7 +42,7 @@ pub fn main() !void {
     hands[1][1] = game.dealCard();
     
     std.debug.print("Setting hole cards...\n", .{});
-    game.dealHoleCards(&hands);
+    game.dealHoleCards(hands[0..]);
     
     std.debug.print("Posting blinds...\n", .{});
     try game.postBlinds();

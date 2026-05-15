@@ -56,6 +56,8 @@ pub const ActionSummary = struct {
     }
 };
 
+const ManagedActionList = std.array_list.Managed(ActionSummary);
+
 /// Comprehensive betting round manager
 pub const BettingManager = struct {
     // Current betting state
@@ -74,7 +76,7 @@ pub const BettingManager = struct {
     player_final_actions: [MAX_PLAYERS]?u8, // Last action type for each player
 
     // Action history for this round
-    action_sequence: std.ArrayList(ActionSummary),
+    action_sequence: ?ManagedActionList,
 
     // Betting constraints
     min_raise_amount: ChipAmount,
@@ -84,8 +86,6 @@ pub const BettingManager = struct {
     current_turn: PlayerId,
     first_to_act: PlayerId,
     last_to_act: PlayerId,
-
-    allocator: std.mem.Allocator,
 
     const Self = @This();
 
@@ -100,26 +100,24 @@ pub const BettingManager = struct {
             .num_players_to_act = 0,
             .players_who_acted = [_]bool{false} ** MAX_PLAYERS,
             .player_final_actions = [_]?u8{null} ** MAX_PLAYERS,
-            .action_sequence = undefined, // Will be set with allocator
+            .action_sequence = null,
             .min_raise_amount = 0,
             .max_raises_allowed = 3,
             .current_turn = 0,
             .first_to_act = 0,
             .last_to_act = 0,
-            .allocator = undefined,
         };
     }
 
     pub fn initWithAllocator(allocator: std.mem.Allocator) Self {
         var manager = Self.init();
-        manager.allocator = allocator;
-        manager.action_sequence = std.ArrayList(ActionSummary).init(allocator);
+        manager.action_sequence = ManagedActionList.init(allocator);
         return manager;
     }
 
     pub fn deinit(self: *Self) void {
-        if (@hasField(@TypeOf(self.action_sequence), "allocator")) {
-            self.action_sequence.deinit();
+        if (self.action_sequence) |*seq| {
+            seq.deinit();
         }
     }
 
@@ -133,8 +131,8 @@ pub const BettingManager = struct {
         self.num_players_to_act = 0;
         self.players_who_acted = [_]bool{false} ** MAX_PLAYERS;
         self.player_final_actions = [_]?u8{null} ** MAX_PLAYERS;
-        if (@hasField(@TypeOf(self.action_sequence), "allocator")) {
-            self.action_sequence.clearRetainingCapacity();
+        if (self.action_sequence) |*seq| {
+            seq.clearRetainingCapacity();
         }
         self.min_raise_amount = 0;
         self.current_turn = 0;
@@ -164,8 +162,8 @@ pub const BettingManager = struct {
         self.first_to_act = first_to_act;
         self.last_to_act = self.findLastToAct(players, first_to_act);
 
-        if (@hasField(@TypeOf(self.action_sequence), "allocator")) {
-            self.action_sequence.clearRetainingCapacity();
+        if (self.action_sequence) |*seq| {
+            seq.clearRetainingCapacity();
         }
     }
 
@@ -184,9 +182,9 @@ pub const BettingManager = struct {
         self.player_final_actions[action.player_id] = action.action_type;
 
         // Record action in sequence
-        if (@hasField(@TypeOf(self.action_sequence), "allocator")) {
+        if (self.action_sequence) |*seq| {
             const summary = ActionSummary.init(action.player_id, action.action_type, action.amount);
-            self.action_sequence.append(self.allocator, summary) catch {};
+            seq.append(summary) catch {};
         }
     }
 
@@ -284,11 +282,13 @@ pub const BettingManager = struct {
 
     /// Get betting round statistics
     pub fn getRoundStats(self: Self) BettingRoundStats {
+        const total_actions: u16 = if (self.action_sequence) |seq|
+            @intCast(seq.items.len)
+        else
+            0;
+
         return BettingRoundStats{
-            .total_actions = if (@hasField(@TypeOf(self.action_sequence), "allocator"))
-                @intCast(self.action_sequence.items.len)
-            else
-                0,
+            .total_actions = total_actions,
             .num_raises = self.num_raises_this_round,
             .current_bet = self.current_bet,
             .players_acted = self.num_players_acted,
@@ -339,8 +339,8 @@ pub const BettingManager = struct {
 
     /// Get action history for this round
     pub fn getActionHistory(self: Self) []const ActionSummary {
-        if (@hasField(@TypeOf(self.action_sequence), "allocator")) {
-            return self.action_sequence.items;
+        if (self.action_sequence) |seq| {
+            return seq.items;
         }
         return &[_]ActionSummary{};
     }
@@ -401,13 +401,11 @@ pub const BettingRoundStats = struct {
 
 /// Betting pattern analyzer
 pub const BettingPatternAnalyzer = struct {
-    action_history: std.ArrayList(ActionSummary),
-    allocator: std.mem.Allocator,
+    action_history: ManagedActionList,
 
     pub fn init(allocator: std.mem.Allocator) BettingPatternAnalyzer {
         return BettingPatternAnalyzer{
-            .action_history = std.ArrayList(ActionSummary).init(allocator),
-            .allocator = allocator,
+            .action_history = ManagedActionList.init(allocator),
         };
     }
 
@@ -416,7 +414,7 @@ pub const BettingPatternAnalyzer = struct {
     }
 
     pub fn addAction(self: *BettingPatternAnalyzer, action: ActionSummary) !void {
-        try self.action_history.append(self.allocator, action);
+        try self.action_history.append(action);
     }
 
     /// Get aggression factor for a player

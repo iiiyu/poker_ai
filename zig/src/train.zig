@@ -124,7 +124,7 @@ pub fn trainMCCFR(config: TrainingConfig, allocator: std.mem.Allocator) !void {
             hands[p][0] = game.dealCard();
             hands[p][1] = game.dealCard();
         }
-        game.dealHoleCards(&hands);
+        game.dealHoleCards(hands[0..]);
         
         // Post blinds
         try game.postBlinds();

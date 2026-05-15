@@ -165,7 +165,7 @@ test "batch evaluation setup" {
     };
     
     var results: [BatchSize]HandRank = undefined;
-    batch_evaluator.evaluateFiveBatch(&hands, &results);
+    batch_evaluator.evaluateFiveBatch(hands[0..], results[0..]);
     
     // Basic validation that we get results
     for (results) |result| {

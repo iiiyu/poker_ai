@@ -49,16 +49,22 @@ pub const version = std.SemanticVersion{ .major = 0, .minor = 1, .patch = 0 };
 
 // Global allocator interface - must be set before using the library
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+var allocator_is_default = true;
 pub var allocator: std.mem.Allocator = gpa_instance.allocator();
 
 /// Initialize the poker AI library with a custom allocator
 pub fn init(alloc: std.mem.Allocator) void {
+    allocator_is_default = false;
     allocator = alloc;
 }
 
 /// Deinitialize the library and clean up resources
 pub fn deinit() void {
-    _ = gpa_instance.deinit();
+    if (allocator_is_default) {
+        _ = gpa_instance.deinit();
+    }
+    allocator = gpa_instance.allocator();
+    allocator_is_default = true;
 }
 
 // Export key types and constants
@@ -94,8 +100,9 @@ test "library initialization" {
     init(testing.allocator);
     defer deinit();
 
-    // Verify allocator is set
-    try testing.expect(allocator.ptr != undefined);
+    // Verify allocator can allocate
+    const buffer = try allocator.alloc(u8, 1);
+    allocator.free(buffer);
 }
 
 test "version check" {

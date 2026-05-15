@@ -10,7 +10,7 @@ const Action = game_state.Action;
 const Round = game_state.Round;
 
 /// Compact node representation for game tree
-pub const GameNode = packed struct {
+pub const GameNode = struct {
     /// Hash of the game state (information set)
     state_hash: u64,
     

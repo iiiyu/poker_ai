@@ -33,34 +33,50 @@ const PokerHandle = struct {
     allocator: std.mem.Allocator,
 };
 
+const HandleMap = std.hash_map.HashMap(u32, PokerHandle, std.hash_map.AutoContext(u32), 80);
+
 // Global handle management
-var g_handles = std.hash_map.HashMap(u32, PokerHandle, std.hash_map.AutoContext(u32), 80).init(std.heap.c_allocator);
+var g_handles = HandleMap.init(std.heap.c_allocator);
 var g_next_handle_id: u32 = 1;
 var g_handle_mutex = std.Thread.Mutex{};
+var init_count: usize = 0;
 
 // Initialize the poker AI library
-export fn poker_ai_init() PokerError {
-    main.init(std.heap.c_allocator);
+pub export fn poker_ai_init() PokerError {
+    g_handle_mutex.lock();
+    defer g_handle_mutex.unlock();
+
+    if (init_count == 0) {
+        main.init(std.heap.c_allocator);
+    }
+    init_count += 1;
     return PokerError.SUCCESS;
 }
 
 // Cleanup the poker AI library
-export fn poker_ai_cleanup() void {
+pub export fn poker_ai_cleanup() void {
     g_handle_mutex.lock();
     defer g_handle_mutex.unlock();
 
-    // Clean up all remaining handles
-    var iterator = g_handles.iterator();
-    while (iterator.next()) |entry| {
-        cleanupHandle(entry.value_ptr.*);
+    if (init_count == 0) return;
+
+    init_count -= 1;
+    if (init_count > 0) return;
+
+    if (g_handles.count() > 0) {
+        var iterator = g_handles.iterator();
+        while (iterator.next()) |entry| {
+            cleanupHandle(entry.value_ptr.*);
+        }
     }
     g_handles.deinit();
+    g_handles = HandleMap.init(std.heap.c_allocator);
 
     main.deinit();
 }
 
 // Hand Evaluator C API
-export fn poker_hand_evaluator_create() u32 {
+pub export fn poker_hand_evaluator_create() u32 {
     const evaluator = std.heap.c_allocator.create(hand_eval.HandEvaluator) catch return 0;
     evaluator.* = hand_eval.HandEvaluator.init();
 
@@ -71,11 +87,11 @@ export fn poker_hand_evaluator_create() u32 {
     });
 }
 
-export fn poker_hand_evaluator_destroy(handle: u32) PokerError {
+pub export fn poker_hand_evaluator_destroy(handle: u32) PokerError {
     return destroyHandle(handle);
 }
 
-export fn poker_hand_evaluate_5(handle: u32, cards: [*c]const u8) u32 {
+pub export fn poker_hand_evaluate_5(handle: u32, cards: [*c]const u8) u32 {
     const evaluator = getHandle(handle, .hand_evaluator) orelse return 0;
     const eval_ptr: *hand_eval.HandEvaluator = @ptrCast(@alignCast(evaluator.ptr));
 
@@ -88,7 +104,7 @@ export fn poker_hand_evaluate_5(handle: u32, cards: [*c]const u8) u32 {
     return result;
 }
 
-export fn poker_hand_evaluate_7(handle: u32, cards: [*c]const u8) u32 {
+pub export fn poker_hand_evaluate_7(handle: u32, cards: [*c]const u8) u32 {
     const evaluator = getHandle(handle, .hand_evaluator) orelse return 0;
     const eval_ptr: *hand_eval.HandEvaluator = @ptrCast(@alignCast(evaluator.ptr));
 
@@ -102,7 +118,7 @@ export fn poker_hand_evaluate_7(handle: u32, cards: [*c]const u8) u32 {
 }
 
 // Game State C API
-export fn poker_game_state_create(num_players: u8, small_blind: u32, big_blind: u32) u32 {
+pub export fn poker_game_state_create(num_players: u8, small_blind: u32, big_blind: u32) u32 {
     const game = std.heap.c_allocator.create(game_state.GameState) catch return 0;
     game.* = game_state.GameState.init(std.heap.c_allocator, num_players, small_blind, big_blind) catch {
         std.heap.c_allocator.destroy(game);
@@ -116,11 +132,11 @@ export fn poker_game_state_create(num_players: u8, small_blind: u32, big_blind: 
     });
 }
 
-export fn poker_game_state_destroy(handle: u32) PokerError {
+pub export fn poker_game_state_destroy(handle: u32) PokerError {
     return destroyHandle(handle);
 }
 
-export fn poker_game_state_deal_hole_cards(handle: u32, player_id: u8, card1: u8, card2: u8) PokerError {
+pub export fn poker_game_state_deal_hole_cards(handle: u32, player_id: u8, card1: u8, card2: u8) PokerError {
     const game = getHandle(handle, .game_state) orelse return PokerError.INVALID_PARAMETER;
     const game_ptr: *game_state.GameState = @ptrCast(@alignCast(game.ptr));
 
@@ -130,7 +146,7 @@ export fn poker_game_state_deal_hole_cards(handle: u32, player_id: u8, card1: u8
     return PokerError.SUCCESS;
 }
 
-export fn poker_game_state_apply_action(handle: u32, action_type: u8, amount: u32) PokerError {
+pub export fn poker_game_state_apply_action(handle: u32, action_type: u8, amount: u32) PokerError {
     const game = getHandle(handle, .game_state) orelse return PokerError.INVALID_PARAMETER;
     const game_ptr: *game_state.GameState = @ptrCast(@alignCast(game.ptr));
 
@@ -143,21 +159,21 @@ export fn poker_game_state_apply_action(handle: u32, action_type: u8, amount: u3
     return if (success) PokerError.SUCCESS else PokerError.GAME_STATE_ERROR;
 }
 
-export fn poker_game_state_is_terminal(handle: u32) c_int {
+pub export fn poker_game_state_is_terminal(handle: u32) c_int {
     const game = getHandle(handle, .game_state) orelse return -1;
     const game_ptr: *game_state.GameState = @ptrCast(@alignCast(game.ptr));
 
     return if (game_ptr.isTerminal()) 1 else 0;
 }
 
-export fn poker_game_state_get_pot(handle: u32) u32 {
+pub export fn poker_game_state_get_pot(handle: u32) u32 {
     const game = getHandle(handle, .game_state) orelse return 0;
     const game_ptr: *game_state.GameState = @ptrCast(@alignCast(game.ptr));
 
     return game_ptr.pot;
 }
 
-export fn poker_game_state_get_current_player(handle: u32) u8 {
+pub export fn poker_game_state_get_current_player(handle: u32) u8 {
     const game = getHandle(handle, .game_state) orelse return 255;
     const game_ptr: *game_state.GameState = @ptrCast(@alignCast(game.ptr));
 
@@ -165,7 +181,7 @@ export fn poker_game_state_get_current_player(handle: u32) u8 {
 }
 
 // CFR Trainer C API
-export fn poker_cfr_trainer_create(iterations: u32, num_threads: u32) u32 {
+pub export fn poker_cfr_trainer_create(iterations: u32, num_threads: u32) u32 {
     const config = cfr.CFRConfig{
         .iterations = iterations,
         .exploration_probability = 0.6,
@@ -184,11 +200,11 @@ export fn poker_cfr_trainer_create(iterations: u32, num_threads: u32) u32 {
     });
 }
 
-export fn poker_cfr_trainer_destroy(handle: u32) PokerError {
+pub export fn poker_cfr_trainer_destroy(handle: u32) PokerError {
     return destroyHandle(handle);
 }
 
-export fn poker_cfr_trainer_train(handle: u32) PokerError {
+pub export fn poker_cfr_trainer_train(handle: u32) PokerError {
     const trainer = getHandle(handle, .cfr_trainer) orelse return PokerError.INVALID_PARAMETER;
     const trainer_ptr: *parallel_cfr.ParallelCFRTrainer = @ptrCast(@alignCast(trainer.ptr));
 
@@ -196,7 +212,7 @@ export fn poker_cfr_trainer_train(handle: u32) PokerError {
     return PokerError.SUCCESS;
 }
 
-export fn poker_cfr_trainer_save_strategy(handle: u32, file_path: [*c]const u8) PokerError {
+pub export fn poker_cfr_trainer_save_strategy(handle: u32, file_path: [*c]const u8) PokerError {
     const trainer = getHandle(handle, .cfr_trainer) orelse return PokerError.INVALID_PARAMETER;
     const trainer_ptr: *parallel_cfr.ParallelCFRTrainer = @ptrCast(@alignCast(trainer.ptr));
 
@@ -208,7 +224,7 @@ export fn poker_cfr_trainer_save_strategy(handle: u32, file_path: [*c]const u8) 
     return PokerError.SUCCESS;
 }
 
-export fn poker_cfr_trainer_load_strategy(handle: u32, file_path: [*c]const u8) PokerError {
+pub export fn poker_cfr_trainer_load_strategy(handle: u32, file_path: [*c]const u8) PokerError {
     const trainer = getHandle(handle, .cfr_trainer) orelse return PokerError.INVALID_PARAMETER;
     const trainer_ptr: *parallel_cfr.ParallelCFRTrainer = @ptrCast(@alignCast(trainer.ptr));
 
@@ -221,7 +237,7 @@ export fn poker_cfr_trainer_load_strategy(handle: u32, file_path: [*c]const u8) 
 }
 
 // Strategy Table C API
-export fn poker_strategy_table_create() u32 {
+pub export fn poker_strategy_table_create() u32 {
     const table = std.heap.c_allocator.create(strategy_table.StrategyTable) catch return 0;
     table.* = strategy_table.StrategyTable.init(std.heap.c_allocator);
 
@@ -232,11 +248,11 @@ export fn poker_strategy_table_create() u32 {
     });
 }
 
-export fn poker_strategy_table_destroy(handle: u32) PokerError {
+pub export fn poker_strategy_table_destroy(handle: u32) PokerError {
     return destroyHandle(handle);
 }
 
-export fn poker_strategy_table_save(handle: u32, file_path: [*c]const u8) PokerError {
+pub export fn poker_strategy_table_save(handle: u32, file_path: [*c]const u8) PokerError {
     const table = getHandle(handle, .strategy_table) orelse return PokerError.INVALID_PARAMETER;
     const table_ptr: *strategy_table.StrategyTable = @ptrCast(@alignCast(table.ptr));
 
@@ -248,7 +264,7 @@ export fn poker_strategy_table_save(handle: u32, file_path: [*c]const u8) PokerE
     return PokerError.SUCCESS;
 }
 
-export fn poker_strategy_table_load(handle: u32, file_path: [*c]const u8) PokerError {
+pub export fn poker_strategy_table_load(handle: u32, file_path: [*c]const u8) PokerError {
     const table = getHandle(handle, .strategy_table) orelse return PokerError.INVALID_PARAMETER;
     const table_ptr: *strategy_table.StrategyTable = @ptrCast(@alignCast(table.ptr));
 
@@ -260,7 +276,7 @@ export fn poker_strategy_table_load(handle: u32, file_path: [*c]const u8) PokerE
     return PokerError.SUCCESS;
 }
 
-export fn poker_strategy_table_get_memory_usage(handle: u32) usize {
+pub export fn poker_strategy_table_get_memory_usage(handle: u32) usize {
     const table = getHandle(handle, .strategy_table) orelse return 0;
     const table_ptr: *strategy_table.StrategyTable = @ptrCast(@alignCast(table.ptr));
 
@@ -268,17 +284,17 @@ export fn poker_strategy_table_get_memory_usage(handle: u32) usize {
 }
 
 // Utility functions for card operations
-export fn poker_card_from_rank_suit(rank: u8, suit: u8) u8 {
+pub export fn poker_card_from_rank_suit(rank: u8, suit: u8) u8 {
     if (rank > 12 or suit > 3) return 255; // Invalid card
     return (rank << 2) | suit;
 }
 
-export fn poker_card_get_rank(card: u8) u8 {
+pub export fn poker_card_get_rank(card: u8) u8 {
     // Extract rank from card representation (bits 2-5)
     return card >> 2;
 }
 
-export fn poker_card_get_suit(card: u8) u8 {
+pub export fn poker_card_get_suit(card: u8) u8 {
     // Extract suit from card representation (bits 0-1)
     return card & 0x03;
 }
@@ -345,14 +361,14 @@ fn cleanupHandle(handle: PokerHandle) void {
 }
 
 // Version information
-export fn poker_ai_version_major() u32 {
+pub export fn poker_ai_version_major() u32 {
     return main.version.major;
 }
 
-export fn poker_ai_version_minor() u32 {
+pub export fn poker_ai_version_minor() u32 {
     return main.version.minor;
 }
 
-export fn poker_ai_version_patch() u32 {
+pub export fn poker_ai_version_patch() u32 {
     return main.version.patch;
 }

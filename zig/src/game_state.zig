@@ -236,7 +236,7 @@ pub const GameState = struct {
     }
 
     // Deal hole cards to players
-    pub fn dealHoleCards(self: *Self, hands: [][2]Card) void {
+    pub fn dealHoleCards(self: *Self, hands: []const [2]Card) void {
         for (hands, 0..) |hand, i| {
             if (i < self.num_players) {
                 self.players[i].hand = Hand.init(hand[0], hand[1]);
@@ -246,7 +246,7 @@ pub const GameState = struct {
 
     // Deal board cards for current round
     pub fn dealBoard(self: *Self, cards: []const Card) void {
-        const board_start = self.round.boardSize();
+        const board_start = self.board_size;
         const new_cards: u8 = switch (self.round) {
             .preflop => 0,
             .flop => 3,
@@ -258,7 +258,7 @@ pub const GameState = struct {
             self.board[board_start + i] = card;
         }
 
-        self.board_size = self.round.boardSize() + new_cards;
+        self.board_size += new_cards;
     }
 
     // Apply player action
@@ -391,7 +391,7 @@ pub const GameState = struct {
     }
 
     // Helper functions
-    fn advanceToNextPlayer(self: *Self) void {
+    pub fn advanceToNextPlayer(self: *Self) void {
         self.current_player = self.nextActivePlayer(self.current_player);
     }
 

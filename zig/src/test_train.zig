@@ -39,7 +39,7 @@ pub fn main() !void {
     hands[1][0] = game.dealCard();
     hands[1][1] = game.dealCard();
     
-    game.dealHoleCards(&hands);
+    game.dealHoleCards(hands[0..]);
     
     // Post blinds
     try game.postBlinds();
@@ -81,7 +81,7 @@ pub fn main() !void {
         hands[0][1] = game.dealCard();
         hands[1][0] = game.dealCard();
         hands[1][1] = game.dealCard();
-        game.dealHoleCards(&hands);
+        game.dealHoleCards(hands[0..]);
         try game.postBlinds();
         
         const u = try trainer.iterate(&game);

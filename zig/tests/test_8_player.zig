@@ -8,6 +8,7 @@ const config = poker_ai.config;
 const game_engine = poker_ai.game_engine;
 const pot = poker_ai.pot;
 const betting = poker_ai.betting;
+const player = poker_ai.player;
 
 test "verify MAX_PLAYERS is 8" {
     try testing.expectEqual(@as(u8, 8), config.MAX_PLAYERS);
@@ -48,7 +49,7 @@ test "8 player pot calculation" {
     
     // Simulate contributions from 8 players
     for (0..8) |player_id| {
-        try pot_manager.addToPot(@intCast(player_id), 100);
+        try pot_manager.addToPot(100, @intCast(player_id));
     }
     
     try testing.expectEqual(@as(u32, 800), pot_manager.getTotalPot());
@@ -56,19 +57,25 @@ test "8 player pot calculation" {
 
 test "8 player betting round" {
     const BettingManager = betting.BettingManager;
-    var betting_manager = BettingManager.init();
+    var betting_manager = BettingManager.initWithAllocator(testing.allocator);
+    defer betting_manager.deinit();
     
     // Initialize with 8 players
-    betting_manager.startNewRound(8);
+    var table_players: [config.MAX_PLAYERS]player.Player = undefined;
+    for (0..8) |i| {
+        table_players[i] = player.Player.init(@intCast(i), 1500);
+    }
+    
+    try betting_manager.startRound(table_players[0..8], 0, 20);
     
     // Simulate actions from all 8 players
     for (0..8) |player_id| {
-        const action = betting.Action{
-            .player_id = @intCast(player_id),
-            .action_type = .call,
+        const player_idx: betting.PlayerId = @intCast(player_id);
+        betting_manager.recordAction(.{
+            .player_id = player_idx,
+            .action_type = @intFromEnum(game_engine.ActionType.call),
             .amount = 20,
-        };
-        betting_manager.recordAction(action);
+        });
     }
     
     // Verify betting round tracks all 8 players
@@ -115,8 +122,9 @@ test "8 player showdown evaluation" {
     engine.board = [_]u8{ 16, 17, 18, 19, 20 }; // Some community cards
     engine.board_size = 5;
     
-    // Move to showdown
+    // Move to showdown and mark terminal so payouts are allowed
     engine.betting_stage = .show_down;
+    engine.is_terminal = true;
     
     // Get payouts for all 8 players
     const payouts = try engine.getPayouts();
@@ -203,8 +211,9 @@ test "8 player display layout" {
         // Verify positions are reasonably spaced
         if (i > 0) {
             const prev_pos = layout.getPlayerPosition(@intCast(i - 1), 8);
-            const dist_sq = (pos.x - prev_pos.x) * (pos.x - prev_pos.x) + 
-                           (pos.y - prev_pos.y) * (pos.y - prev_pos.y);
+            const dx = @as(i32, @intCast(pos.x)) - @as(i32, @intCast(prev_pos.x));
+            const dy = @as(i32, @intCast(pos.y)) - @as(i32, @intCast(prev_pos.y));
+            const dist_sq = dx * dx + dy * dy;
             try testing.expect(dist_sq > 100); // Minimum distance between players
         }
     }

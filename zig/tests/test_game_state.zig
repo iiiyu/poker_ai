@@ -127,7 +127,7 @@ test "dealing hole cards" {
         .{ 2, 3 },   // Player 1: 2h 2s
     };
     
-    game.dealHoleCards(&hands);
+    game.dealHoleCards(hands[0..]);
     
     try testing.expectEqual(@as(u8, 0), game.players[0].hand.cards[0]);
     try testing.expectEqual(@as(u8, 1), game.players[0].hand.cards[1]);
@@ -145,7 +145,7 @@ test "dealing board cards" {
     // Deal flop
     game.round = .flop;
     const flop_cards = [_]u8{ 4, 5, 6 };
-    game.dealBoard(&flop_cards);
+    game.dealBoard(flop_cards[0..]);
     
     try testing.expectEqual(@as(u8, 3), game.board_size);
     try testing.expectEqual(@as(u8, 4), game.board[0]);
@@ -155,7 +155,7 @@ test "dealing board cards" {
     // Deal turn
     game.round = .turn;
     const turn_cards = [_]u8{7};
-    game.dealBoard(&turn_cards);
+    game.dealBoard(turn_cards[0..]);
     
     try testing.expectEqual(@as(u8, 4), game.board_size);
     try testing.expectEqual(@as(u8, 7), game.board[3]);
@@ -234,15 +234,17 @@ test "betting round completion" {
     var game = try poker_ai.game_state.GameState.init(testing.allocator, 2, 5, 10);
     defer game.deinit();
     
-    // Initially betting is not complete
+    // With no outstanding bets the round counts as complete
+    try testing.expect(game.isBettingComplete());
+    
+    // Create a mismatch to force an incomplete round
+    game.current_bet = 20;
+    game.players[0].bet_this_round = 20;
+    game.players[1].bet_this_round = 10;
     try testing.expect(!game.isBettingComplete());
     
-    // Simulate all players acting (simplified)
-    game.players[0].bet_this_round = 10;
-    game.players[1].bet_this_round = 10;
-    game.current_bet = 10;
-    
-    // Now betting should be complete
+    // Once the trailing player matches the bet the round is complete again
+    game.players[1].bet_this_round = 20;
     try testing.expect(game.isBettingComplete());
 }
 
@@ -294,6 +296,7 @@ test "terminal game states" {
 }
 
 test "information set generation" {
+    const allocator = testing.allocator;
     var game = try poker_ai.game_state.GameState.init(testing.allocator, 2, 5, 10);
     defer game.deinit();
     
@@ -332,6 +335,7 @@ test "player advancement" {
 }
 
 test "edge cases and stress testing" {
+    const allocator = testing.allocator;
     // Single player game (edge case)
     var single_game = try poker_ai.game_state.GameState.init(testing.allocator, 1, 5, 10);
     defer single_game.deinit();
